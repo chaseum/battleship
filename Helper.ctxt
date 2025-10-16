@@ -1,0 +1,21 @@
+#BlueJ class context
+comment0.target=Helper
+comment1.params=
+comment1.target=Helper()
+comment2.params=height
+comment2.target=int\ fixHeight(int)
+comment3.params=height
+comment3.target=int\ fixHeight2(int)
+comment4.params=width
+comment4.target=int\ fixWidth(int)
+comment5.params=width
+comment5.target=int\ fixWidth2(int)
+comment6.params=c1\ c2\ fraction
+comment6.target=java.awt.Color\ interpolate(java.awt.Color,\ java.awt.Color,\ double)
+comment7.params=ips
+comment7.target=java.lang.String\ ipToCode(java.lang.String)
+comment8.params=code
+comment8.target=java.lang.String\ codeToIp(java.lang.String)
+comment9.params=min\ num\ max
+comment9.target=int\ clamp(int,\ int,\ int)
+numComments=10
