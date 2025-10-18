@@ -1,126 +1,156 @@
 
 import javax.swing.*;
+import javax.swing.text.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.net.*;
-import javax.swing.Timer;
 import java.awt.*;
 
 public class ClientWaiting extends JPanel implements ActionListener {
 
-    private JTextField codeField;
+	private JTextField codeField;
+	private JFrame frame;
+	private Socket server;
+	private GridBagConstraints c;
+	private JLabel instructions;
+	private JButton back;
 
-    private JFrame frame;
-    private Socket server;
-    private Timer timer;
-    private GridBagConstraints c;
-    private JLabel instructions;
+	public ClientWaiting(JFrame frame) {
+		this.frame = frame;
+		buildUI();
+	}
 
-    public ClientWaiting(JFrame frame) {
-        this.frame = frame;
-        loginScreen();
+	private void buildUI() {
+		setBackground(Helper.bgColor);
+		setLayout(new GridBagLayout());
+		c = new GridBagConstraints();
+		c.gridx = 0;
+		c.gridy = 0;
+		c.gridwidth = 1;
+		c.anchor = GridBagConstraints.CENTER;
 
-    }
+		JLabel label = new JLabel("Input Game Code");
+		label.setFont(Helper.titleFont);
+		add(label, c);
 
-    public void actionPerformed(ActionEvent e) {
-        if (e.getSource() == timer) {
-            fixField();
-        }
-        if (e.getSource() == codeField) {
-            if (codeField.getText().matches("[A-Za-z]{6}")) {
-                String ip = Helper.codeToIp(codeField.getText());
-                System.out.println(ip);
+		c.gridy = 1;
+		c.insets = new Insets(Helper.fixHeight(200), 0, 0, 0);
+		instructions = new JLabel("Press Enter to Submit");
+		instructions.setFont(Helper.normalTxtFont);
+		add(instructions, c);
 
-                try {
-                    server = new Socket(ip, 20000);
+		c.gridy = 2;
+		codeField = buildCodeField();
+		c.insets = new Insets(Helper.fixHeight(200), 0, 0, 0);
+		add(codeField, c);
 
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-                this.removeAll();
-                frame.remove(this);
-                timer.stop();
-                codeField.setVisible(false);
-                frame.getContentPane().remove(this);
-                frame.getContentPane().add(new SetUp(frame, server, true), "SET_UP");
-                ((CardLayout) frame.getContentPane().getLayout()).show(frame.getContentPane(), "CLIENT_WAIT"); // shows setup
-                // screen
-                frame.getContentPane().revalidate();
-                frame.getContentPane().repaint();
-                //frame.removeAll();
+		c.gridy = 3;
+		c.insets = new Insets(Helper.fixHeight(60), 0, 0, 0);
+		back = new JButton("Back");
+		back.setFocusable(true);
+		back.addActionListener(e -> goTitle());
+		add(back, c);
 
-            } else {
-                codeField.setText("");
-            }
-        }
+		// Register this panel in the frame's CardLayout (if not already present), and
+		// show it.
+		if (getParent() == null) {
+			frame.getContentPane().add(this, "CLIENT_WAIT");
+		}
+		((CardLayout) frame.getContentPane().getLayout()).show(frame.getContentPane(), "CLIENT_WAIT");
+		frame.getContentPane().revalidate();
+		frame.getContentPane().repaint();
 
-    }
+		codeField.requestFocusInWindow();
+	}
 
-    public void fixField() {
-        if (codeField.getText().length() > 6) {
-            codeField.setText(codeField.getText().substring(0, 6));
+	private void goTitle() {
+		try {
+			if (server != null && !server.isClosed())
+				server.close();
+		} catch (IOException ignored) {
+		}
+		Helper.showCard(frame, "TITLE");
+	}
 
-        }
-        int textWidth = codeField.getFontMetrics(Helper.buttonFont).stringWidth(codeField.getText());
-        int fieldWidth = codeField.getWidth() - 2 * Helper.fieldPadding;
-        if (textWidth > fieldWidth || textWidth > 100 && textWidth < fieldWidth) {
-            this.setVisible(false);
-            this.remove(codeField);
-            codeField = buildCodeField();
-            codeField.setPreferredSize(new Dimension(textWidth + 2 * Helper.fieldPadding, 100));
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		if (e.getSource() == codeField) { // user pressed Enter
+			String code = codeField.getText().trim(); // already sanitized by our filter
+			if (code.length() == 6) {
+				try {
+					String ip = Helper.codeToIp(code);
+					int port = 5000;// must return an int
 
-            c.gridwidth = 2;
-            this.add(codeField, c);
+					server = new Socket();
+					server.connect(new InetSocketAddress(ip, port), 5000); // 5s timeout
 
-            codeField.requestFocus();
-            this.setVisible(true);
+					// Move to setup screen
+					frame.getContentPane().add(new SetUp(frame, server, true), "SET_UP");
+					((CardLayout) frame.getContentPane().getLayout()).show(frame.getContentPane(), "SET_UP");
+					frame.getContentPane().revalidate();
+					frame.getContentPane().repaint();
+				} catch (NumberFormatException nfe) {
+					// If codeToPort produced something non-numeric
+					JOptionPane.showMessageDialog(this, "Invalid game code (bad port). Try again.");
+					codeField.setText("");
+				} catch (Exception ex) {
+					ex.printStackTrace();
+					JOptionPane.showMessageDialog(this, "Could not connect. Check the code or try again.");
+				}
+			} else {
+				// Shouldn't happen due to filter, but guard anyway
+				JOptionPane.showMessageDialog(this, "Game code must be 6 letters (A–Z).");
+				codeField.setText("");
+			}
+		}
+	}
 
-            codeField.requestFocus();
+	private JTextField buildCodeField() {
+		JTextField tf = new JTextField();
+		tf.setFont(Helper.buttonFont);
+		tf.setHorizontalAlignment(JTextField.CENTER);
+		tf.setBackground(Helper.buttonBg);
+		tf.setColumns(6); // stable width; no dynamic resizing while typing
+		tf.addActionListener(this); // Enter submits
 
-        }
-    }
+		// Install filter: allow only A–Z, limit to 6, uppercase automatically
+		AbstractDocument doc = (AbstractDocument) tf.getDocument();
+		doc.setDocumentFilter(new codeFilter(6));
+		return tf;
+	}
 
-    public JTextField buildCodeField() {
-        codeField = new JTextField(codeField != null ? codeField.getText() : "pppppp");
+	class codeFilter extends DocumentFilter {
+		private final int maxLen;
 
-        codeField.setFont(Helper.buttonFont);
-        codeField.setHorizontalAlignment(JTextField.CENTER);
-        codeField.addActionListener(this);
-        codeField.setBackground(Helper.buttonBg);
-        codeField.setPreferredSize(new Dimension(100, 100));
-        return codeField;
+		codeFilter(int maxLen) {
+			this.maxLen = maxLen;
+		}
 
-    }
+		@Override
+		public void insertString(FilterBypass fb, int offset, String string, AttributeSet attr)
+				throws BadLocationException {
+			if (string == null)
+				return;
+			int room = maxLen - fb.getDocument().getLength();
+			if (room <= 0)
+				return;
+			if (string.length() > room)
+				string = string.substring(0, room);
+			super.insertString(fb, offset, string, attr);
+		}
 
-    public void loginScreen() {
-        System.out.println("logging in");
-        JLabel label = new JLabel("Input Game Code");
-        instructions = new JLabel("Press Enter to Submit");
-        this.setBackground(Helper.bgColor);
-
-        timer = new Timer(1, this);
-        this.setLayout(new GridBagLayout());
-        c = new GridBagConstraints();
-
-        c.gridx = 0;
-        c.gridy = 0;
-        c.gridwidth = 1;
-        c.anchor = GridBagConstraints.CENTER;
-        //c.insets=new Insets(500,120,0,120);
-
-        this.add(label, c);
-        c.gridy = 1;
-        c.insets = new Insets(Helper.fixHeight(200), 0, 0, 0);
-
-        this.add(instructions, c);
-        c.gridy = 2;
-        label.setFont(Helper.titleFont);
-        instructions.setFont(Helper.normalTxtFont);
-        codeField = buildCodeField();
-        c.insets = new Insets(Helper.fixHeight(200), 0, 0, 0);
-        this.add(codeField, c);
-        frame.add(this);
-        codeField.requestFocus();
-        frame.setVisible(true);
-        timer.start();
-    }
+		@Override
+		public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs)
+				throws BadLocationException {
+			String current = fb.getDocument().getText(0, fb.getDocument().getLength());
+			String before = current.substring(0, offset);
+			String after = current.substring(offset + length);
+			String cleaned = (text == null ? "" : text);
+			String next = before + cleaned + after;
+			if (next.length() > maxLen) {
+				next = next.substring(0, maxLen);
+			}
+			super.replace(fb, 0, fb.getDocument().getLength(), next, attrs);
+		}
+	}
 }
