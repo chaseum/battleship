@@ -1,7 +1,0 @@
-
-
-public enum ScreenState
-{
-    CONNECTING,SETUP,WAITING,TURNING,TURNWAITING,END;
-   
-}
