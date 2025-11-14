@@ -1,0 +1,18 @@
+# Java build artifacts
+bin/
+out/
+target/
+*.class
+*.jar
+
+# IDE stuff
+.vscode/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS trash
+.DS_Store
+Thumbs.db
