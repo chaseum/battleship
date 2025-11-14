@@ -1,274 +1,168 @@
-Neo-Retro Battleship
+# Neo-Retro Battleship  
+*A modular, extensible Battleship engine with Classic and Neo-Retro modes, AI, networking, and a full CLI.*
 
-A modular, extensible, multiplayer Battleship engine with Classic and Neo-Retro modes, full CLI gameplay, online matchmaking via a rendezvous server, and an ability-based combat system.
+---
 
-Overview
+## Overview
 
-Neo-Retro Battleship is a full rebuild and modernization of the classic Battleship game, designed with:
+Neo-Retro Battleship is a rebuilt, modernized version of the Battleship game designed with:
 
-Clean architecture (core engine → CLI/UI → AI → networking)
+- Clean, modular architecture  
+- Terminal-first design for debugging  
+- AI opponents (decision-tree based)  
+- Online multiplayer via rendezvous server  
+- Neo-Retro abilities (EMP, Shield, Multishot, Sonar, etc.)  
+- Future GUI compatibility (Atari-style grid)
 
-Terminal-first gameplay for fast testing and debugging
+This project emphasizes software engineering best practices:
 
-AI opponents using decision-tree heuristics
+- Domain-driven design  
+- Robust state transitions  
+- Networked turn synchronization  
+- Extensible mechanics (plug-in ability system)  
+- Clear separation between core engine, UI, networking, and AI
 
-Online multiplayer with a minimalist text protocol
+---
 
-Neo-Retro abilities (EMP, Shield, Multishot, Sonar, etc.)
+## Features
 
-Future GUI compatibility for an Atari-style visual interface
+### Classic Mode
+- Standard Battleship rules  
+- Turn-based firing  
+- Hidden enemy board  
+- Win by sinking all ships  
 
-This project highlights software engineering discipline:
+### Neo-Retro Mode
+Adds tactical abilities with cooldowns and charges:
 
-Modular domain modeling
+- **EMP** – disables enemy abilities  
+- **Shield** – protects a tile  
+- **Multishot** – fire multiple shots  
+- **Sonar** – scan an area for ships  
 
-Reliable game-state transitions
+---
 
-Networked turn-based synchronization
+## Project Structure
 
-Expandable mechanics and plug-in ability system
-
-Clear separation of concerns across packages
-
-Features
-Classic Mode
-
-Standard Battleship rules
-
-Hidden enemy board
-
-Turn-based firing
-
-Win by sinking all ships
-
-Neo-Retro Mode
-
-Adds tactical abilities with charge/cooldown mechanics:
-
-EMP – Temporarily disables opponent abilities
-
-Shield – Protects a tile from being hit
-
-Multishot – Fire multiple shots in one turn
-
-Sonar – Scan an area for nearby ships
-
-These abilities are implemented via AbilityRule, AbilityStatus, and DefaultAbilityExecutor.
-
+```text
 src/main/java/com/chase/battleship/
 │
-├── core/          # Game engine, rules, board model, ability system
-├── cli/           # Terminal UI + local players
-├── ai/            # DecisionTreeAI, agents, heuristics
-└── net/           # Online host/join, rendezvous client/server, protocol
+├── core/    # Game engine, rules, board, abilities
+├── cli/     # Terminal UI, local multiplayer
+├── ai/      # DecisionTreeAI and player agents
+└── net/     # Rendezvous server/client and online protocol
 
-Core Module
+# Core Module
 Handles:
+- Board representation
+- Ship placement
+- Turn actions
+- Ability rules and cooldowns
+- Game phases
+- Turn resolution
+- Win/loss logic
 
-Board representation
+# CLI Module
+- Terminal menus
+- Board printing
+- Local vs AI or 2-player
+- Mode selection
 
-Ship placement
+# AI Module
+- Decision-tree heuristic AI
+- Hunt/target logic
+- State-driven move selection
 
-Turn actions
+# Networking Module
+- Rendezvous server (matchmaking)
+- Online host/client sockets
+- Lightweight text protocol
+- Built to be UI-agnostic
 
-Ability rules + cooldowns
+# Requirements
+- Java 17+
+- Recommended: Maven or VS Code Java extensions
+- Multiplayer requires running the rendezvous server
 
-Game phase transitions
+# Running the Game
 
-Turn resolution
+## 1. Compile
 
-Win/loss detection
+### Using Maven:
+- mvn -q -DskipTests compile
+- javac -d bin $(find src/main/java -name "*.java")
+- java -cp target/classes com.chase.battleship.cli.BattleshipCli
 
-CLI Module
-
-Human terminal input
-
-Board rendering
-
-Game loop control
-
-Menus and mode selection
-
-AI Module
-
-Pure state-driven decision agent
-
-Heuristic targeting
-
-Adaptive hunt-mode & target-mode logic
-
-Networking Module
-
-Rendezvous server (matchmaking)
-
-Online host/client sockets
-
-Simple text protocol for:
-
-Commands
-
-Board updates
-
-Move prompts
-
-Game-over signaling
-
-Built to be GUI-agnostic—everything that touches the terminal is isolated to the CLI layer.
-
-Requirements
-
-Java 17+
-
-Recommended: Maven or VS Code + Java extensions
-
-For online play:
-
-Java can run the rendezvous server locally, or
-
-Host it remotely (no credentials required)
-
-Running the Game
-1. Compile
-
-If using Maven:
-
-mvn -q -DskipTests compile
-
-
-If using plain Java:
-
-javac -d bin $(find src/main/java -name "*.java")
-
-Game Modes
-2. Run the CLI
-java -cp target/classes com.chase.battleship.cli.BattleshipCli
-
-
-You’ll see:
-
+You will see:
 === Neo-Retro Battleship ===
-1) Classic vs AI
-2) Neo-Retro vs AI
-3) Classic 2P Local
-4) Neo-Retro 2P Local
-5) Classic Online Host
-6) Classic Online Join
-7) Quit
+1. Classic vs AI
+2. Neo-Retro vs AI
+3. Classic 2P Local
+4. Neo-Retro 2P Local
+5. Classic Online Host
+6. Classic Online Join
+7. Quit
 
-Online Multiplayer
-1. Start the Rendezvous Server (matchmaking)
-java -cp target/classes com.chase.battleship.net.RendezvousServer
+# Online Multiplayer
 
-2. Host a Game
-java -cp target/classes com.chase.battleship.cli.BattleshipCli
+## 1. Run the Rendezvous Server
+- java -cp target/classes com.chase.battleship.net.RendezvousServer
+## 2. Host a Game
+- java -cp target/classes com.chase.battleship.cli.BattleshipCli
+- Choose **Classic Online Host**.  
+It will display a join code, e.g.:
+- Hosting game. Share this code: VSKmiK
+## 3. Join a Game
+Open another terminal and run:
+- java -cp target/classes com.chase.battleship.cli.BattleshipCli
 
+Select **Classic Online Join**, enter the code, and the game begins.
 
-Choose “Classic Online Host”.
-You’ll get a lobby code like:
+# Move Commands (Online)
+- F r c → Fire at (row, col)
+- A EMP → Use EMP
+- A SHIELD r c → Shield tile
+- A MULTISHOT n → Fire n extra shots
+- A SONAR r c → Scan around (row, col)
 
-Hosting game. Share this code: VSKmiK
+# ASCII Board Example
+0 1 2 3 4 5 6 7 8 9
+0 . . . . . . . . . .
+1 . S . . . . . . . .
+2 . S . . . . . . . .
+3 . S . . . . . . . S
+4 . S . . . S . . . S
+5 . S . S S S . . . S
+6 . . . . S S . . . S
+7 . . . . S . . . . .
+8 . . . . S . . . . .
+9 . . . . . . . . . .
 
-3. Join a Game
+# Roadmap
+- Full GUI (JavaFX, LibGDX, LWJGL)
+- Pixel-art grid rendering
+- Online matchmaking lobby
+- Probability-based AI
+- Replay viewer with logs
+- Visual and sound effects
 
-Open another terminal:
+# Why This Project Matters
 
-java -cp target/classes com.chase.battleship.cli.BattleshipCli
+Demonstrates proficiency in:
+- Networking
+- Turn-based engine design
+- Clean Java architecture
+- AI heuristics
+- Modular extensibility
+- Ability & rule systems
+- CLI/UX separation
 
+Ideal for showcasing:
+- Software engineering fundamentals
+- Multiplayer systems
+- AI behavior programming
+- Game engine design
+- Maintainable code structure
 
-Choose “Classic Online Join” and enter the code.
-
-The system automatically:
-
-Resolves the code via rendezvous
-
-Connects client → host
-
-Synchronizes turns
-
-Sends board updates
-
-Exchanges actions via text commands
-
-Example Move Commands (Client & Host)
-F r c                 → Fire at (r,c)
-A EMP                 → Use EMP
-A SHIELD r c          → Shield (r,c)
-A MULTISHOT n         → Fire n extra shots
-A SONAR r c           → Scan around (r,c)
-
-
-These commands correspond directly to TurnAction types.
-
-Screenshots (ASCII)
-
-Board Example:
-
-   0 1 2 3 4 5 6 7 8 9
- 0  . . . . . . . . . .
- 1  . S . . . . . . . .
- 2  . S . . . . . . . .
- 3  . S . . . . . . . S
- 4  . S . . . S . . . S
- 5  . S . S S S . . . S
- 6  . . . . S S . . . S
- 7  . . . . S . . . . .
- 8  . . . . S . . . . .
- 9  . . . . . . . . . .
-
-Development Goals & Future Work
-
-Add full GUI using:
-
-LWJGL
-
-JavaFX
-
-LibGDX
-
-Replace ASCII boards with pixel-art grid
-
-Implement online matchmaking lobby
-
-Expand AI with probability heatmaps
-
-Replay viewer (record + playback)
-
-Full sound + visual effects in Neo-Retro mode
-
-This codebase is designed to make all of these additions straightforward.
-
-Why This Project Matters
-
-This project demonstrates:
-
-Networking fundamentals
-
-Turn-based engine design
-
-Clean modular Java architecture
-
-Terminal UI separation
-
-AI behavior modeling
-
-Serializable board/turn abstractions
-
-A scalable ability system
-
-It is engineered to be readable, extensible, and production-ready.
-
-Perfect for showcasing:
-
-Software engineering fundamentals
-
-Multi-module Java projects
-
-Game logic & networking
-
-Architecture and maintainability
-
-System design thinking
-
-License
-
+# License
 MIT License
