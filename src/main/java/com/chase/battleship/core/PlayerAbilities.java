@@ -20,5 +20,9 @@ public class PlayerAbilities {
 
 	public void tickAll() {
 		statusMap.values().forEach(AbilityStatus::tickCooldown);
-	}
+        statusMap.forEach((type, status) -> {
+            assert status.getCharges() >= 0 : "PlayerAbilities: negative charges for " + type;
+            assert status.getCooldownRemaining() >= 0 : "PlayerAbilities: negative cooldown for " + type;
+        });
+    }
 }

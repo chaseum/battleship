@@ -27,56 +27,95 @@ public class DecisionTreeAI implements PlayerAgent {
 	}
 
 	private TurnAction maybeUseAbility(GameState gameState, PlayerState me, PlayerState enemy) {
-		if(me.abilitiesLocked() || me.getAbilities() == null) {
+		if (gameState.getConfig().getGameMode() != GameMode.NEO_RETRO) {
+			return null;
+		}
+		if (me.abilitiesLocked() || me.getAbilities() == null) {
 			return null;
 		}
 
 		PlayerAbilities abilities = me.getAbilities();
 		Board tracking = me.getTrackingBoard();
+		int rows = tracking.getRows();
+		int cols = tracking.getCols();
+		int total = rows * cols;
 
-		//sonar early game info gather
-		AbilityStatus sonar = abilities.getStatus(AbilityType.SONAR);
-		if(sonar != null && sonar.isAvailable()) {
-			int unknown = countUnknownCells(tracking);
-			int total = tracking.getRows() * tracking.getCols();
-			if(unknown > total * 0.7) { // only when there's low awareness 
+		int unknown = countUnknownCells(tracking);
+		double unknownRatio = (double) unknown / total;
+
+		boolean earlyGame = unknownRatio > 0.70;
+		boolean midGame   = unknownRatio > 0.40 && unknownRatio <= 0.70;
+		boolean lateGame  = unknownRatio <= 0.40;
+
+		// Global gate: most turns should just be shots.
+		// Early: 40% chance to even consider abilities
+		// Mid:   25%
+		// Late:  10%
+		double roll = random.nextDouble();
+		double abilityChance = earlyGame ? 0.40 : (midGame ? 0.25 : 0.10);
+		if (roll > abilityChance) {
+			return null;
+		}
+
+		AbilityStatus sonar     = abilities.getStatus(AbilityType.SONAR);
+		AbilityStatus shield    = abilities.getStatus(AbilityType.SHIELD);
+		AbilityStatus multishot = abilities.getStatus(AbilityType.MULTISHOT);
+		AbilityStatus emp       = abilities.getStatus(AbilityType.EMP);
+
+		// 1) Early-game info: SONAR, but only then, and not all the time.
+		if (earlyGame && sonar != null && sonar.isAvailable()) {
+			if (random.nextDouble() < 0.50) {
 				Coordinate center = randomUnknownCoordinate(tracking);
 				return new UseAbilityAction(
-					AbilityType.SONAR,
-					new AbilityTarget(center, 0)
+						AbilityType.SONAR,
+						new AbilityTarget(center, 0)
 				);
 			}
 		}
-		// to explain, an example of a heuristic:
-		// use shield if there is a large ship unshielded and enemy has many hits on it
-		AbilityStatus shield = abilities.getStatus(AbilityType.SHIELD);
-		if(shield != null && shield.isAvailable()) {
-			Coordinate critical = findCriticalShipCoordinate(me);
-			if(critical != null) {
-				return new UseAbilityAction(AbilityType.SHIELD, new AbilityTarget(critical, 0));
+
+		// 2) Offensive priority: MULTISHOT when board is still reasonably unknown.
+		if ((earlyGame || midGame) && multishot != null && multishot.isAvailable()) {
+			if (unknownRatio > 0.30 && random.nextDouble() < 0.70) {
+				return new UseAbilityAction(
+						AbilityType.MULTISHOT,
+						new AbilityTarget(null, 3)
+				);
 			}
 		}
 
-		// use multishot early when many cells are unknown
-		AbilityStatus multiStatus = me.getAbilities().getStatus(AbilityType.MULTISHOT);
-		if(multiStatus != null && multiStatus.isAvailable()) {
-			int unknown = countUnknownCells(me.getTrackingBoard());
-			int total = me.getTrackingBoard().getRows() * me.getTrackingBoard().getCols();
-			if(unknown > total * 0.5) {
-				return new UseAbilityAction(AbilityType.MULTISHOT, new AbilityTarget(null, 3));
+		// 3) EMP: support offensive, mid/late game only, occasional.
+		if (!earlyGame && emp != null && emp.isAvailable()) {
+			int aliveShips = (int) enemy.getOwnBoard()
+					.getShips()
+					.stream()
+					.filter(s -> !s.isSunk())
+					.count();
+			if (aliveShips >= 3 && random.nextDouble() < 0.30) {
+				return new UseAbilityAction(
+						AbilityType.EMP,
+						new AbilityTarget(null, 0)
+				);
 			}
 		}
 
-		// use emp if enemy has lots of ships alive and we think they're using abilities (placeholder)
-		AbilityStatus empStatus = me.getAbilities().getStatus(AbilityType.EMP);
-		if(empStatus != null && empStatus.isAvailable()) {
-			int aliveShips = (int) enemy.getOwnBoard().getShips().stream().filter(s -> !s.isSunk()).count();
-			if(aliveShips >= 3) {
-				return new UseAbilityAction(AbilityType.EMP, new AbilityTarget(null, 0));
+		// 4) SHIELD: defensive, relatively rare overall.
+		if (shield != null && shield.isAvailable()) {
+			double pShield = earlyGame ? 0.25 : (midGame ? 0.15 : 0.05);
+			if (random.nextDouble() < pShield) {
+				Coordinate critical = findCriticalShipCoordinate(me);
+				if (critical != null) {
+					return new UseAbilityAction(
+							AbilityType.SHIELD,
+							new AbilityTarget(critical, 0)
+					);
+				}
 			}
 		}
+
+		// Default: no ability this turn → fire
 		return null;
 	}
+
 
 	private int countUnknownCells(Board tracking) {
 		int unknown = 0;
@@ -116,53 +155,86 @@ public class DecisionTreeAI implements PlayerAgent {
 	}
 
 	private Coordinate chooseFireTarget(PlayerState me, PlayerState enemy) {
-		// looking for adj to hits
-		List<Coordinate> candidates = new ArrayList<>();
 		Board tracking = me.getTrackingBoard();
+		int rows = tracking.getRows();
+		int cols = tracking.getCols();
 
-		for(int r = 0; r < tracking.getRows(); r++){
-			for(int c = 0; c < tracking.getCols(); c++) {
-				Coordinate coord = new Coordinate(r,c);
-				if(tracking.getCellState(coord) == CellState.HIT) {
+		// target mode
+		List<Coordinate> candidates = new ArrayList<>();
+		for (int r = 0; r < rows; r++) {
+			for (int c = 0; c < cols; c++) {
+				Coordinate coord = new Coordinate(r, c);
+				if (tracking.getCellState(coord) == CellState.HIT) {
 					addNeighbors(tracking, coord, candidates);
 				}
 			}
 		}
-		if(!candidates.isEmpty()) {
+		if (!candidates.isEmpty()) {
 			return candidates.get(random.nextInt(candidates.size()));
 		}
 
-		// hunt mode: fire random cell that is still empty
+		// hunt mode
 		List<Coordinate> huntCells = new ArrayList<>();
-		for(int r = 0; r < tracking.getRows(); r++) {
-			for(int c = 0; c < tracking.getCols(); c++) {
-				Coordinate coord = new Coordinate(r,c);
-				if((r+c)%2 == 0 && tracking.getCellState(coord) == CellState.EMPTY) {
-					huntCells.add(coord);
-				}
-			}
-		}
-		if(huntCells.isEmpty()) {
-			// any empty cell
-			for(int r = 0; r < tracking.getRows(); r++) {
-				for(int c = 0; c < tracking.getCols(); c++) {
-					Coordinate coord = new Coordinate(r,c);
-					if(tracking.getCellState(coord) == CellState.EMPTY) {
+		for (int r = 0; r < rows; r++) {
+			for (int c = 0; c < cols; c++) {
+				if ((r + c) % 2 == 0) {
+					Coordinate coord = new Coordinate(r, c);
+					if (tracking.getCellState(coord) == CellState.EMPTY) {
 						huntCells.add(coord);
 					}
 				}
 			}
 		}
-		return huntCells.get(random.nextInt(huntCells.size()));
-	}
+		if (!huntCells.isEmpty()) {
+			return huntCells.get(random.nextInt(huntCells.size()));
+		}
 
-	private void addNeighbors(Board b, Coordinate hit, List<Coordinate> out) {
-		int[][] dirs = { {1,0}, {-1,0}, {0,1}, {0,-1} };
-		for(int[] d : dirs) {
-			Coordinate c = new Coordinate(hit.row() + d[0], hit.col() + d[1]);
-			if(b.inBounds(c) && b.getCellState(c) == CellState.EMPTY) {
-				out.add(c);
+		// fallback on empty cell
+		List<Coordinate> empties = new ArrayList<>();
+		for (int r = 0; r < rows; r++) {
+			for (int c = 0; c < cols; c++) {
+				Coordinate coord = new Coordinate(r, c);
+				if (tracking.getCellState(coord) == CellState.EMPTY) {
+					empties.add(coord);
+				}
 			}
 		}
-	}
+		if (!empties.isEmpty()) {
+			return empties.get(random.nextInt(empties.size()));
+		}
+
+		// failsafe pick random
+		int rr = random.nextInt(rows);
+		int cc = random.nextInt(cols);
+		return new Coordinate(rr, cc);
+}
+
+
+	private void addNeighbors(Board board, Coordinate hit, List<Coordinate> out) {
+        int r = hit.row();
+        int c = hit.col();
+        int rows = board.getRows();
+        int cols = board.getCols();
+
+        int[][] dirs = {
+                {-1, 0},
+                { 1, 0},
+                { 0,-1},
+                { 0, 1}
+        };
+
+        for (int[] d : dirs) {
+            int nr = r + d[0];
+            int nc = c + d[1];
+
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {
+                continue;
+            }
+            Coordinate cand = new Coordinate(nr, nc);
+            CellState s = board.getCellState(cand);
+            if (s == CellState.EMPTY && !out.contains(cand)) {
+                out.add(cand);
+            }
+        }
+    }
 }
