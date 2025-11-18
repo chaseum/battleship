@@ -3,6 +3,7 @@ package com.chase.battleship.core;
 import java.util.Random;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
 
 public class DefaultAbilityExecutor implements AbilityExecutor {
 	private final Random random = new Random();
@@ -28,19 +29,146 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 		return new AbilityResult("EMP deployed! "+ opponent.getName() + "'s abilties disabled for 2 turns");
 	}
 
-	private AbilityResult doMultishot(GameState gameState, PlayerState user, PlayerState opponent, AbilityTarget target) {
-		int shots = Math.max(1, target.extraShots());
+	private AbilityResult doMultishot(GameState gameState,
+                                  PlayerState user,
+                                  PlayerState opponent,
+                                  AbilityTarget target) {
+
+    if (target.manualTargets() != null && !target.manualTargets().isEmpty()) {
+        return doMultishotManual(user, opponent, target.manualTargets());
+    }
+    return autoMultishotAI(user, opponent);
+}
+
+	private AbilityResult doMultishotManual(PlayerState user,
+											PlayerState opponent,
+											List<Coordinate> targets) {
+		Board tracking   = user.getTrackingBoard();
+		Board enemyBoard = opponent.getOwnBoard();
+
 		int hits = 0;
-		for(int i = 0; i < shots; i++) {
-			// for now pick random new targets, let CLI fit coords
-			Coordinate c = randomCoordinate(opponent.getOwnBoard());
-			ShotOutcome outcome = opponent.getOwnBoard().fireAt(c);
-			if(outcome == ShotOutcome.HIT || outcome == ShotOutcome.SUNK || outcome == ShotOutcome.SHIELDED_HIT) {
+		int sunk = 0;
+		int shots = targets.size();
+
+		for (Coordinate c : targets) {
+			if (!enemyBoard.inBounds(c)) continue;
+
+			ShotOutcome outcome = enemyBoard.fireAt(c);
+
+			if (outcome == ShotOutcome.MISS ||
+				outcome == ShotOutcome.HIT ||
+				outcome == ShotOutcome.SUNK ||
+				outcome == ShotOutcome.SHIELDED_HIT) {
+
+				CellState mark = (outcome == ShotOutcome.MISS)
+						? CellState.MISS : CellState.HIT;
+				if (tracking.inBounds(c)) {
+					tracking.markSeen(c, mark);
+				}
+			}
+
+			if (outcome == ShotOutcome.HIT || outcome == ShotOutcome.SHIELDED_HIT) {
 				hits++;
+			} else if (outcome == ShotOutcome.SUNK) {
+				hits++;
+				sunk++;
 			}
 		}
-		return new AbilityResult("Multishot fired "+ shots + " shots, hits = " + hits);
+
+		String desc = "Multishot (manual): fired " + shots + ", hits=" + hits;
+		if (sunk > 0) desc += ", ships sunk=" + sunk;
+		return new AbilityResult(desc);
 	}
+
+	private AbilityResult autoMultishotAI(PlayerState user,
+										PlayerState opponent) {
+		Board tracking   = user.getTrackingBoard();
+		Board enemyBoard = opponent.getOwnBoard();
+
+		int rows = tracking.getRows();
+		int cols = tracking.getCols();
+
+		List<Coordinate> cluster = new ArrayList<>();
+		boolean[][] seen = new boolean[rows][cols];
+
+		for (int r = 0; r < rows; r++) {
+			for (int c = 0; c < cols; c++) {
+				Coordinate hit = new Coordinate(r, c);
+				if (tracking.getCellState(hit) == CellState.HIT) {
+					int[][] dirs = {
+							{-1, 0}, {1, 0},
+							{0, -1}, {0, 1}
+					};
+					for (int[] d : dirs) {
+						int nr = r + d[0];
+						int nc = c + d[1];
+						if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+						if (seen[nr][nc]) continue;
+						Coordinate nb = new Coordinate(nr, nc);
+						if (tracking.getCellState(nb) == CellState.EMPTY) {
+							seen[nr][nc] = true;
+							cluster.add(nb);
+						}
+					}
+				}
+			}
+		}
+
+		List<Coordinate> empties = new ArrayList<>();
+		for (int r = 0; r < rows; r++) {
+			for (int c = 0; c < cols; c++) {
+				Coordinate coord = new Coordinate(r, c);
+				if (tracking.getCellState(coord) == CellState.EMPTY) {
+					empties.add(coord);
+				}
+			}
+		}
+
+		List<Coordinate> candidates = new ArrayList<>();
+		if (!cluster.isEmpty()) candidates.addAll(cluster);
+		candidates.addAll(empties);
+
+		if (candidates.isEmpty()) {
+			for (int r = 0; r < rows; r++) {
+				for (int c = 0; c < cols; c++) {
+					candidates.add(new Coordinate(r, c));
+				}
+			}
+		}
+
+		Collections.shuffle(candidates);
+
+		int shots = Math.min(3, candidates.size());
+		int hits = 0;
+		int sunk = 0;
+
+		for (int i = 0; i < shots; i++) {
+			Coordinate c = candidates.get(i);
+			ShotOutcome outcome = enemyBoard.fireAt(c);
+
+			if (outcome == ShotOutcome.MISS ||
+				outcome == ShotOutcome.HIT ||
+				outcome == ShotOutcome.SUNK ||
+				outcome == ShotOutcome.SHIELDED_HIT) {
+
+				CellState mark = (outcome == ShotOutcome.MISS)
+						? CellState.MISS : CellState.HIT;
+				if (tracking.inBounds(c)) {
+					tracking.markSeen(c, mark);
+				}
+			}
+
+			if (outcome == ShotOutcome.HIT || outcome == ShotOutcome.SHIELDED_HIT) hits++;
+			else if (outcome == ShotOutcome.SUNK) { hits++; sunk++; }
+		}
+
+		String desc = "Multishot fired " + shots + " shots, hits=" + hits;
+		if (sunk > 0) desc += ", ships sunk=" + sunk;
+		return new AbilityResult(desc);
+	}
+
+
+
 
 	private Coordinate randomCoordinate(Board b) {
 		int r = random.nextInt(b.getRows());
@@ -69,8 +197,15 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 
 		for(int dr = -radius; dr <= radius; dr++) {
 			for(int dc = -radius; dc <= radius; dc++) {
-				Coordinate c = new Coordinate(center.row() + dr, center.col() + dc);
-				if(!enemyBoard.inBounds(c)) continue;
+				int nr = center.row() + dr;
+				int nc = center.col() + dc;
+
+				if(!enemyBoard.inBounds(nr, nc)) {
+					continue;
+				}
+
+				Coordinate c = new Coordinate(nr,nc);
+
 				if(enemyBoard.findShipAt(c).isPresent()) {
 					hits.add(c);
 				}

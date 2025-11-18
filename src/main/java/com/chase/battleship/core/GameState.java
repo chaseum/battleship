@@ -13,18 +13,29 @@ public class GameState {
 		this.player2 = p2;
 		this.player1Turn = true;
 		this.gameOver = false;
+		assert invariantCurrentPlayer() : "GameState: invariant failed in constructor";
 	}
+
+	private boolean invariantCurrentPlayer() {
+        PlayerState current = getCurrentPlayer();
+        PlayerState other = getOtherPlayer();
+        return current != null && other != null && current != other;
+    }
 
 	public GameConfig getConfig() {
 		return config;
 	}
 
 	public PlayerState getCurrentPlayer() {
-		return player1Turn ? player1 : player2;
+		PlayerState current = player1Turn ? player1 : player2;
+        assert current != null : "GameState: current player is null";
+        return current;
 	}
 
 	public PlayerState getOtherPlayer() {
-		return player1Turn ? player2 : player1;
+		PlayerState other = player1Turn ? player2 : player1;
+        assert other != null : "GameState: other player is null";
+        return other;
 	}
 
 	public boolean isGameOver() {
@@ -36,7 +47,9 @@ public class GameState {
 	}
 
 	public void nextTurn() {
-		player1Turn = !player1Turn;
-		getCurrentPlayer().tickTurn();
+		assert !isGameOver() : "GameState: nextTurn called after game over";
+        player1Turn = !player1Turn;
+        getCurrentPlayer().tickTurn();
+        assert invariantCurrentPlayer() : "GameState: invariant failed after nextTurn";
 	}
 }

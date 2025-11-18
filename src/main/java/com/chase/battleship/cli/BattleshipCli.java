@@ -60,9 +60,9 @@ public class BattleshipCli {
 		Board b2 = new Board(config.getRows(), config.getCols());
 
 		// for now, random placement, allow manual w cli later
-		BoardUtils.setupBoardInteractive(b1);
+		// BoardUtils.setupBoardInteractive(b1);
 		// setupBoardInteractive(b2);
-		// BoardUtils.randomFleetPlacement(b1);
+		BoardUtils.randomFleetPlacement(b1);
 		BoardUtils.randomFleetPlacement(b2);
 
 		PlayerState ps1 = new PlayerState(p1Name, b1, config);

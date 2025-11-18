@@ -28,6 +28,10 @@ public class Board {
 		return c.row() >= 0 && c.row() < rows && c.col() >= 0 && c.col() < cols;
 	}
 
+	public boolean inBounds(int r, int c) {
+		return r >= 0 && r < rows && c >= 0 && c < cols;
+	}
+
 	public boolean canPlaceShip(ShipType type, Coordinate start, boolean horizontal) {
 		int length = type.getLength();
 		for(int i = 0; i < length; i++) {
@@ -57,29 +61,34 @@ public class Board {
 	}
 
 	public ShotOutcome fireAt(Coordinate target) {
-		if(!inBounds(target)) {
-			return ShotOutcome.OUT_OF_BOUNDS;
-		}
+        assert inBounds(target) : "fireAt: coord out of bounds: " + target;
 
-		CellState state = grid[target.row()][target.col()];
-		if (state == CellState.MISS || state == CellState.HIT) {
-			return ShotOutcome.ALREADY_TARGETED;
-		}
-		if(state == CellState.SHIP) {
-			Ship hitShip = findShipAt(target).orElseThrow(() -> new IllegalArgumentException("No ship at cell but state is SHIP"));
-			boolean wasShielded = hitShip.hasShield();
-			hitShip.registerHit();
-			grid[target.row()][target.col()] = CellState.HIT;
+        if (!inBounds(target)) {
+            return ShotOutcome.OUT_OF_BOUNDS;
+        }
 
-			if(hitShip.isSunk()) {
-				return ShotOutcome.SUNK;
-			}
-			return wasShielded ? ShotOutcome.SHIELDED_HIT : ShotOutcome.HIT;
-		}
+        CellState state = grid[target.row()][target.col()];
 
-		grid[target.row()][target.col()] = CellState.MISS;
-		return ShotOutcome.MISS;
-	}
+        if (state == CellState.MISS || state == CellState.HIT) {
+            return ShotOutcome.ALREADY_TARGETED;
+        }
+
+        if (state == CellState.SHIP) {
+            Ship hitShip = findShipAt(target)
+                    .orElseThrow(() -> new IllegalArgumentException("No ship at cell but state is SHIP"));
+            boolean wasShielded = hitShip.hasShield();
+            hitShip.registerHit();
+            grid[target.row()][target.col()] = CellState.HIT;
+
+            if (hitShip.isSunk()) {
+                return ShotOutcome.SUNK;
+            }
+            return wasShielded ? ShotOutcome.SHIELDED_HIT : ShotOutcome.HIT;
+        }
+
+        grid[target.row()][target.col()] = CellState.MISS;
+        return ShotOutcome.MISS;
+    }
 
 	public boolean allShipsSunk() {
 		return ships.stream().allMatch(Ship::isSunk);
@@ -96,5 +105,28 @@ public class Board {
 	public void markSeen(Coordinate c, CellState state) {
     	if (!inBounds(c)) throw new IllegalArgumentException("Out of bounds");
     	grid[c.row()][c.col()] = state;
+	}
+
+	public boolean allShipsSunkByGrid() {
+            for (CellState[] grid1 : grid) {
+                for (CellState grid11 : grid1) {
+                    if (grid11 == CellState.SHIP) {
+                        return false;
+                    }
+                }
+            }
+		return true;
+	}
+
+	public int countShipCells() {
+		int count = 0;
+		for (CellState[] grid1 : grid) {
+                for (CellState grid11 : grid1) {
+                    if (grid11 == CellState.SHIP) {
+                        count++;
+                    }
+                }
+            }
+		return count;
 	}
 }
