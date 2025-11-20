@@ -36,13 +36,13 @@ public class HostModeScreen extends BaseScreen {
         classicBtn.setOnAction(e -> {
             manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_ONLINE_HOST);
             manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
+            manager.show(ScreenId.HOST_LOBBY);
         });
 
         neoBtn.setOnAction(e -> {
             manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_ONLINE_HOST);
             manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
+            manager.show(ScreenId.HOST_LOBBY);
         });
 
         backBtn.setOnAction(e -> manager.goBack());
