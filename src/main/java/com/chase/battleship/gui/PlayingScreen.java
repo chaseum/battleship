@@ -365,8 +365,8 @@ public class PlayingScreen extends BaseScreen {
 
     private void maybeHighlightSonar(TurnAction action) {
         if (!(action instanceof UseAbilityAction abilityAction)) return;
-        if (abilityAction.getType() != AbilityType.SONAR) return;
-        AbilityTarget target = abilityAction.getTarget();
+        if (abilityAction.abilityType() != AbilityType.SONAR) return;
+        AbilityTarget target = abilityAction.target();
         if (target == null || target.coordinate() == null) return;
         flashSonarArea(target.coordinate());
     }
