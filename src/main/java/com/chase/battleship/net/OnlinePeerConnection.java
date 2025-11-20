@@ -6,6 +6,7 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
 
 public class OnlinePeerConnection {
 
@@ -14,10 +15,12 @@ public class OnlinePeerConnection {
     private final PlayerState clientPlayer;
     private final boolean host;
     private final ServerSocket serverSocket;
-    private final Socket socket;
-    private final BufferedReader in;
-    private final PrintWriter out;
+    private Socket socket;
+    private BufferedReader in;
+    private PrintWriter out;
     private final String lobbyCode;
+    private final CountDownLatch readyLatch = new CountDownLatch(1);
+    private IOException connectionFailure;
 
     public OnlinePeerConnection(GameConfig config, PlayerState hostPlayer, PlayerState clientPlayer, boolean host, String joinCode) {
         this.config = config;
@@ -30,27 +33,14 @@ public class OnlinePeerConnection {
                 serverSocket = new ServerSocket(0);
                 lobbyCode = NetUtil.makeCode(6);
                 RendezvousClient.registerCode(lobbyCode, serverSocket.getLocalPort());
-                socket = serverSocket.accept();
+                startAcceptThread();
             } else {
                 serverSocket = null;
                 lobbyCode = null;
                 if (joinCode == null || joinCode.isBlank()) {
                     throw new IllegalStateException("No join code provided");
                 }
-                RendezvousClient.HostEndpoint ep = RendezvousClient.resolveCode(joinCode);
-                if (ep == null) {
-                    throw new IllegalStateException("Join code not found on rendezvous server");
-                }
-                socket = new Socket(ep.host(), ep.port());
-            }
-
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-
-            if (host) {
-                sendInitialSetup();
-            } else {
-                receiveInitialSetup();
+                connectToHost(joinCode);
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to establish online connection", e);
@@ -63,10 +53,56 @@ public class OnlinePeerConnection {
 
     public void close() {
         try {
-            socket.close();
+            if (socket != null) {
+                socket.close();
+            }
         } catch (IOException ignored) {}
         if (serverSocket != null) {
             try { serverSocket.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    private void startAcceptThread() throws IOException {
+        Thread t = new Thread(() -> {
+            try {
+                socket = serverSocket.accept();
+                initIo();
+                sendInitialSetup();
+            } catch (IOException e) {
+                connectionFailure = e;
+            } finally {
+                readyLatch.countDown();
+            }
+        }, "online-host-accept");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void connectToHost(String joinCode) throws IOException {
+        RendezvousClient.HostEndpoint ep = RendezvousClient.resolveCode(joinCode);
+        if (ep == null) {
+            throw new IllegalStateException("Join code not found on rendezvous server");
+        }
+        socket = new Socket(ep.host(), ep.port());
+        initIo();
+        receiveInitialSetup();
+        readyLatch.countDown();
+    }
+
+    private void initIo() throws IOException {
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+        out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+    }
+
+    private void awaitReady() {
+        try {
+            readyLatch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for peer connection", e);
+        }
+        if (connectionFailure != null) {
+            throw new IllegalStateException("Failed to establish online connection", connectionFailure);
         }
     }
 
@@ -115,6 +151,7 @@ public class OnlinePeerConnection {
     }
 
     public TurnAction waitForRemoteMove() {
+        awaitReady();
         try {
             String line = in.readLine();
             if (line == null || !line.startsWith("MOVE ")) {
@@ -127,10 +164,12 @@ public class OnlinePeerConnection {
     }
 
     public void sendLocalMove(TurnAction action) {
+        awaitReady();
         out.println("MOVE " + Protocol.formatAction(action));
     }
 
     public RemoteUpdate waitForUpdate(GameEngine engine) {
+        awaitReady();
         try {
             TurnAction action = null;
             String message = "";
@@ -162,6 +201,7 @@ public class OnlinePeerConnection {
     }
 
     public void broadcastResult(TurnAction action, TurnResult result, GameState state) {
+        awaitReady();
         out.println("APPLY " + Protocol.formatAction(action));
         out.println("MSG " + result.message());
         if (state.isGameOver()) {
