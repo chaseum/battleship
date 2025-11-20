@@ -24,7 +24,7 @@ public class HostLobbyScreen extends BaseScreen {
     public HostLobbyScreen(ScreenManager manager) {
         super(manager);
 
-        root = new VBox(10);
+        root = new VBox(18);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(40));
         root.setStyle("-fx-background-color: #001b29;");
@@ -58,23 +58,44 @@ public class HostLobbyScreen extends BaseScreen {
 
     @Override
     public void onShow() {
-		System.out.println("[HostLobbyScreen] onShow called");
-        if (manager.getCurrentSession() == null) {
-            session = new GuiGameSession(manager.getPlannedMode(), manager.getPendingJoinCode());
-            manager.setCurrentSession(session);
-        } else {
-            session = manager.getCurrentSession();
-        }
+        stopWaiting();
+        codeLabel.setText("Generating code...");
+        statusLabel.setText("Connecting to rendezvous...");
 
-        Platform.runLater(() -> {
-            codeLabel.setText("Lobby Code: " + session.getLobbyCode());
-            statusLabel.setText("Waiting for a player to join...");
-        });
+        Thread setupThread = new Thread(() -> {
+            try {
+                GuiGameSession existingSession = manager.getCurrentSession();
+                GuiGameSession preparedSession = existingSession != null
+                        ? existingSession
+                        : new GuiGameSession(manager.getPlannedMode(), manager.getPendingJoinCode());
 
-        startWaitingForClient();
+                if (existingSession == null) {
+                    manager.setCurrentSession(preparedSession);
+                }
+
+                Platform.runLater(() -> {
+                    session = preparedSession;
+                    codeLabel.setText("Lobby Code: " + session.getLobbyCode());
+                    statusLabel.setText("Waiting for a player to join...");
+                    startWaitingForClient();
+                });
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    session = null;
+                    codeLabel.setText("Lobby Code: --");
+                    statusLabel.setText("Failed to host: " + ex.getMessage());
+                });
+            }
+        }, "host-setup");
+
+        setupThread.setDaemon(true);
+        setupThread.start();
     }
 
     private void startWaitingForClient() {
+        if (session == null) {
+            return;
+        }
         stopWaiting();
         waiting = true;
 
