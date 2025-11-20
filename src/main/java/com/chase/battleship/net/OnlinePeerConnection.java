@@ -192,7 +192,7 @@ public class OnlinePeerConnection {
             }
             TurnResult res = engine.processTurn(action);
             if (gameOver) {
-                engine.getState().endGame();
+                engine.getGameState().endGame();
             }
             return new RemoteUpdate(res, message);
         } catch (IOException e) {
