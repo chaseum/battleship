@@ -58,6 +58,7 @@ public class HostLobbyScreen extends BaseScreen {
 
     @Override
     public void onShow() {
+		System.out.println("[HostLobbyScreen] onShow called");
         if (manager.getCurrentSession() == null) {
             session = new GuiGameSession(manager.getPlannedMode(), manager.getPendingJoinCode());
             manager.setCurrentSession(session);
