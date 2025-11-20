@@ -26,21 +26,21 @@ public class HostModeScreen extends BaseScreen {
         Label title = new Label("Host Game");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
 
-        Label note = new Label("Network hosting is WIP. For now this starts local 2-player.");
+        Label note = new Label("Share the generated code after choosing a mode.");
         note.setStyle("-fx-text-fill: #cccccc;");
 
-        Button classicBtn = new Button("Classic Local 2P");
-        Button neoBtn = new Button("Neo-Retro Local 2P");
+        Button classicBtn = new Button("Classic Online Host");
+        Button neoBtn = new Button("Neo-Retro Online Host");
         Button backBtn = new Button("Back");
 
         classicBtn.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_LOCAL_2P);
+            manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_ONLINE_HOST);
             manager.clearCurrentSession();
             manager.show(ScreenId.SETUP);
         });
 
         neoBtn.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_LOCAL_2P);
+            manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_ONLINE_HOST);
             manager.clearCurrentSession();
             manager.show(ScreenId.SETUP);
         });

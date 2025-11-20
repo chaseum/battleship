@@ -15,6 +15,7 @@ import javafx.util.Duration;
 public class PlayingScreen extends BaseScreen {
 
     private static final int CELL_SIZE = 28;
+    private static final Duration TURN_DELAY = Duration.millis(1200);
 
     private final BorderPane root;
     private final GridPane myGrid;
@@ -91,6 +92,7 @@ public class PlayingScreen extends BaseScreen {
 
         setupAbilityButtons();
         syncFromState();
+        triggerRemoteIfNeeded();
     }
 
     private GridPane createBoardGrid(boolean enemy) {
@@ -140,6 +142,7 @@ public class PlayingScreen extends BaseScreen {
         if (res != null) {
             actionLabel.setText("You: " + res.message());
         }
+        maybeHighlightSonar(action);
         syncFromState();
 
         if (session.getState().isGameOver()) {
@@ -148,24 +151,47 @@ public class PlayingScreen extends BaseScreen {
             return;
         }
 
-        if (!session.isCurrentPlayerHuman()) {
-            // Let AI move after a short delay so the player can see the result.
-            PauseTransition pause = new PauseTransition(Duration.millis(450));
-            pause.setOnFinished(e -> {
-                TurnResult aiRes = session.maybeLetAiAct();
-                if (aiRes != null) {
-                    actionLabel.setText("Enemy: " + aiRes.message());
+        PauseTransition pause = new PauseTransition(TURN_DELAY);
+        pause.setOnFinished(e -> {
+            TurnResult autoRes = null;
+            if (!session.isCurrentPlayerHuman()) {
+                autoRes = session.maybeLetAiAct();
+                if (autoRes != null) {
+                    actionLabel.setText("Enemy: " + autoRes.message());
                 }
-                syncFromState();
-                if (session.getState().isGameOver()) {
-                    handleGameOver();
-                }
-                isProcessing = false;
-            });
-            pause.play();
-        } else {
+            }
+
+            syncFromState();
+            if (session.getState().isGameOver()) {
+                handleGameOver();
+            }
             isProcessing = false;
+            triggerRemoteIfNeeded();
+        });
+        pause.play();
+    }
+
+    private void triggerRemoteIfNeeded() {
+        if (session == null || session.isCurrentPlayerHuman() || session.getState().isGameOver()) {
+            isProcessing = false;
+            return;
         }
+        if (isProcessing) return;
+        isProcessing = true;
+        PauseTransition pause = new PauseTransition(TURN_DELAY);
+        pause.setOnFinished(e -> {
+            TurnResult autoRes = session.maybeLetAiAct();
+            if (autoRes != null) {
+                actionLabel.setText(autoRes.message());
+            }
+            syncFromState();
+            if (session.getState().isGameOver()) {
+                handleGameOver();
+            }
+            isProcessing = false;
+            triggerRemoteIfNeeded();
+        });
+        pause.play();
     }
 
     private void syncFromState() {
@@ -174,9 +200,8 @@ public class PlayingScreen extends BaseScreen {
         GameState gs = session.getState();
         PlayerState current = gs.getCurrentPlayer();
 
-        // For single-player we always show from Player 1's perspective.
-        PlayerState me = session.getP1();
-        PlayerState enemy = (me == session.getP1()) ? session.getP2() : session.getP1();
+        PlayerState me = session.getLocalPlayer();
+        PlayerState enemy = session.getRemotePlayer();
 
         Board myBoard = me.getOwnBoard();
         Board myTracking = me.getTrackingBoard();
@@ -267,7 +292,7 @@ public class PlayingScreen extends BaseScreen {
         if (session == null) return;
         if (session.getConfig().getGameMode() != GameMode.NEO_RETRO) return;
 
-        PlayerState me = session.getP1(); // only human player in single-player
+        PlayerState me = session.getLocalPlayer();
         if (me.getAbilities() == null) {
             sonarBtn.setDisable(true);
             multiBtn.setDisable(true);
@@ -336,5 +361,49 @@ public class PlayingScreen extends BaseScreen {
     @Override
     public Region getRoot() {
         return root;
+    }
+
+    private void maybeHighlightSonar(TurnAction action) {
+        if (!(action instanceof UseAbilityAction abilityAction)) return;
+        if (abilityAction.getType() != AbilityType.SONAR) return;
+        AbilityTarget target = abilityAction.getTarget();
+        if (target == null || target.coordinate() == null) return;
+        flashSonarArea(target.coordinate());
+    }
+
+    private void flashSonarArea(Coordinate center) {
+        Board tracking = session.getLocalPlayer().getTrackingBoard();
+
+        for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+                int rr = center.row() + dr;
+                int cc = center.col() + dc;
+                Coordinate coord = new Coordinate(rr, cc);
+                Rectangle rect = findCell(enemyGrid, rr, cc);
+                if (rect == null) continue;
+                rect.setFill(Color.GOLD);
+
+                PauseTransition revert = new PauseTransition(TURN_DELAY);
+                revert.setOnFinished(e -> {
+                    CellState state = tracking.inBounds(coord) ? tracking.getCellState(coord) : CellState.EMPTY;
+                    rect.setFill(colorForEnemyCell(state));
+                });
+                revert.play();
+            }
+        }
+    }
+
+    private Rectangle findCell(GridPane grid, int row, int col) {
+        for (Node node : grid.getChildren()) {
+            if (!(node instanceof Rectangle rect)) continue;
+            Integer cIdx = GridPane.getColumnIndex(node);
+            Integer rIdx = GridPane.getRowIndex(node);
+            int c = cIdx == null ? 0 : cIdx;
+            int r = rIdx == null ? 0 : rIdx;
+            if (r == row && c == col) {
+                return rect;
+            }
+        }
+        return null;
     }
 }

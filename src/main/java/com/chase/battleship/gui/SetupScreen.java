@@ -19,6 +19,7 @@ public class SetupScreen extends BaseScreen {
     private final BorderPane root;
     private final GridPane boardGrid;
     private final Label titleLabel;
+    private final Label subtitleLabel;
 
     private GuiGameSession session;
 
@@ -32,7 +33,10 @@ public class SetupScreen extends BaseScreen {
         titleLabel = new Label("Place Your Ships");
         titleLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 28px;");
 
-        HBox titleBox = new HBox(titleLabel);
+        subtitleLabel = new Label("");
+        subtitleLabel.setStyle("-fx-text-fill: #cccccc; -fx-font-size: 14px;");
+
+        VBox titleBox = new VBox(6, titleLabel, subtitleLabel);
         titleBox.setAlignment(Pos.CENTER);
         titleBox.setPadding(new Insets(10, 0, 20, 0));
         root.setTop(titleBox);
@@ -67,17 +71,22 @@ public class SetupScreen extends BaseScreen {
     public void onShow() {
         if (manager.getCurrentSession() == null) {
             GuiGameSession.Mode mode = manager.getPlannedMode();
-            session = new GuiGameSession(mode);
+            session = new GuiGameSession(mode, manager.getPendingJoinCode());
             manager.setCurrentSession(session);
         } else {
             session = manager.getCurrentSession();
+        }
+        if (session.isOnline() && session.isHost()) {
+            subtitleLabel.setText("Lobby code: " + session.getLobbyCode());
+        } else {
+            subtitleLabel.setText("");
         }
         refreshBoardView();
     }
 
     private void autoSetup() {
         GuiGameSession.Mode mode = manager.getPlannedMode();
-        session = new GuiGameSession(mode);
+        session = new GuiGameSession(mode, manager.getPendingJoinCode());
         manager.setCurrentSession(session);
         refreshBoardView();
     }
@@ -101,7 +110,7 @@ public class SetupScreen extends BaseScreen {
     private void refreshBoardView() {
         if (session == null) return;
 
-        Board board = session.getState().getCurrentPlayer().getOwnBoard();
+        Board board = session.getLocalPlayer().getOwnBoard();
         for (Node node : boardGrid.getChildren()) {
             if (!(node instanceof Rectangle rect)) continue;
             Integer cIdx = GridPane.getColumnIndex(node);

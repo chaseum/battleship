@@ -27,19 +27,21 @@ public class JoinCodeScreen extends BaseScreen {
         Label title = new Label("Join Game");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
 
-        Label info = new Label("Network join is not yet wired to the rendezvous server.");
+        Label info = new Label("Enter the lobby code shared by the host.");
         info.setStyle("-fx-text-fill: #cccccc;");
 
         TextField codeField = new TextField();
         codeField.setPromptText("Enter join code");
         codeField.setMaxWidth(250); // <-- much smaller than full width
 
-        Button joinBtn = new Button("Join (WIP)");
+        Button joinBtn = new Button("Join Game");
         Button backBtn = new Button("Back");
 
         joinBtn.setOnAction(e -> {
-            // For now, just show an in-game message; do not start a session.
-            info.setText("Joining by code is work-in-progress. Use CLI for online play.");
+            manager.setPendingJoinCode(codeField.getText().trim());
+            manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_ONLINE_CLIENT);
+            manager.clearCurrentSession();
+            manager.show(ScreenId.SETUP);
         });
 
         backBtn.setOnAction(e -> manager.goBack());
