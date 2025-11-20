@@ -58,6 +58,8 @@ public class HostLobbyScreen extends BaseScreen {
 
     @Override
     public void onShow() {
+        stopWaiting();
+
         if (manager.getCurrentSession() == null) {
             session = new GuiGameSession(manager.getPlannedMode(), manager.getPendingJoinCode());
             manager.setCurrentSession(session);
@@ -65,8 +67,10 @@ public class HostLobbyScreen extends BaseScreen {
             session = manager.getCurrentSession();
         }
 
-        codeLabel.setText("Lobby Code: " + session.getLobbyCode());
-        statusLabel.setText("Waiting for a player to join...");
+        Platform.runLater(() -> {
+            codeLabel.setText("Lobby Code: " + session.getLobbyCode());
+            statusLabel.setText("Waiting for a player to join...");
+        });
 
         startWaitingForClient();
     }

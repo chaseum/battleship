@@ -7,6 +7,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
+import javafx.application.Platform;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -18,6 +19,7 @@ import javafx.scene.layout.VBox;
 public class JoinCodeScreen extends BaseScreen {
 
     private final VBox root;
+    private final Label errorLabel;
 
     public JoinCodeScreen(ScreenManager manager) {
         super(manager);
@@ -57,19 +59,44 @@ public class JoinCodeScreen extends BaseScreen {
         Button joinBtn = new Button("Join Game");
         Button backBtn = new Button("Back");
 
+        errorLabel = new Label("");
+        errorLabel.setStyle("-fx-text-fill: #ff6666;");
+
         joinBtn.setOnAction(e -> {
-            manager.setPendingJoinCode(codeField.getText().trim());
+            errorLabel.setText("");
+            String code = codeField.getText().trim();
             GuiGameSession.Mode mode = classicBtn.isSelected()
                     ? GuiGameSession.Mode.CLASSIC_ONLINE_CLIENT
                     : GuiGameSession.Mode.NEORETRO_ONLINE_CLIENT;
+
+            joinBtn.setDisable(true);
             manager.setPlannedMode(mode);
+            manager.setPendingJoinCode(code);
             manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
+
+            Thread joinThread = new Thread(() -> {
+                try {
+                    GuiGameSession session = new GuiGameSession(mode, code);
+                    session.waitForPeerReady();
+                    Platform.runLater(() -> {
+                        manager.setCurrentSession(session);
+                        manager.show(ScreenId.SETUP);
+                    });
+                } catch (Exception ex) {
+                    Platform.runLater(() -> {
+                        errorLabel.setText("Failed to join: " + ex.getMessage());
+                        joinBtn.setDisable(false);
+                    });
+                }
+            }, "join-connector");
+
+            joinThread.setDaemon(true);
+            joinThread.start();
         });
 
         backBtn.setOnAction(e -> manager.goBack());
 
-        root.getChildren().addAll(title, info, modeRow, codeField, joinBtn, backBtn);
+        root.getChildren().addAll(title, info, modeRow, codeField, joinBtn, backBtn, errorLabel);
     }
 
     @Override
