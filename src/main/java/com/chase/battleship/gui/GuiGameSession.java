@@ -190,6 +190,24 @@ public class GuiGameSession {
         return p2IsHuman;
     }
 
+    /**
+     * Waits for the remote player to join when hosting an online game.
+     */
+    public void waitForPeerReady() {
+        if (online && net != null) {
+            net.waitForPeerReady();
+        }
+    }
+
+    /**
+     * Releases any network resources for the current session.
+     */
+    public void close() {
+        if (net != null) {
+            net.close();
+        }
+    }
+
     public boolean isCurrentPlayerHuman() {
         PlayerState current = state.getCurrentPlayer();
         if (online) {
