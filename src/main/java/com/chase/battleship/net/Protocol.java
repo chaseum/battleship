@@ -3,13 +3,30 @@ package com.chase.battleship.net;
 import com.chase.battleship.core.*;
 
 public final class Protocol {
-	private Protocol() {}
+        private Protocol() {}
 
-	public static TurnAction parseClientCommand(String line) {
-		String[] parts = line.trim().split("\\s+");
-		if(parts.length == 0) {
-			throw new IllegalArgumentException("Empty command");
-		}
+        public static String formatAction(TurnAction action) {
+                if (action instanceof FireAction fire) {
+                        return "F " + fire.getTarget().row() + " " + fire.getTarget().col();
+                }
+                if (action instanceof UseAbilityAction ua) {
+                        AbilityType type = ua.getType();
+                        AbilityTarget target = ua.getTarget();
+                        return switch (type) {
+                                case SHIELD -> "A " + type + " " + target.coordinate().row() + " " + target.coordinate().col();
+                                case MULTISHOT -> "A " + type + " " + target.radiusOrCount();
+                                case SONAR -> "A " + type + " " + target.coordinate().row() + " " + target.coordinate().col();
+                                default -> "A " + type;
+                        };
+                }
+                throw new IllegalArgumentException("Cannot format action: " + action);
+        }
+
+        public static TurnAction parseClientCommand(String line) {
+                String[] parts = line.trim().split("\\s+");
+                if(parts.length == 0) {
+                        throw new IllegalArgumentException("Empty command");
+                }
 		switch(parts[0]) {
 			case "F" -> {
 				int r = Integer.parseInt(parts[1]);
