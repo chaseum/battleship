@@ -10,5 +10,5 @@ public enum ScreenId {
         SETUP,
         PLAYING,
         WIN,
-	LOSE
+		LOSE
 }

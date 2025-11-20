@@ -24,7 +24,7 @@ public class HostLobbyScreen extends BaseScreen {
     public HostLobbyScreen(ScreenManager manager) {
         super(manager);
 
-        root = new VBox(18);
+        root = new VBox(10);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(40));
         root.setStyle("-fx-background-color: #001b29;");
@@ -58,6 +58,7 @@ public class HostLobbyScreen extends BaseScreen {
 
     @Override
     public void onShow() {
+		System.out.println("[HostLobbyScreen] onShow called");
         if (manager.getCurrentSession() == null) {
             session = new GuiGameSession(manager.getPlannedMode(), manager.getPendingJoinCode());
             manager.setCurrentSession(session);
