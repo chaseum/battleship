@@ -51,6 +51,15 @@ public class OnlinePeerConnection {
         return lobbyCode;
     }
 
+    /**
+     * Blocks until the remote peer has connected and the initial setup exchange is complete.
+     * For hosts this waits for the client to join; for clients it returns immediately because
+     * the constructor already performed the handshake.
+     */
+    public void waitForPeerReady() {
+        awaitReady();
+    }
+
     public void close() {
         try {
             if (socket != null) {

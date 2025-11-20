@@ -95,6 +95,7 @@ public class ScreenManager {
             case SINGLE_PLAYER_SELECT -> new SinglePlayerScreen(this);
             case MULTI_PLAYER_SELECT -> new MultiPlayerScreen(this);
             case HOST_MODE_SELECT -> new HostModeScreen(this);
+            case HOST_LOBBY -> new HostLobbyScreen(this);
             case JOIN_CODE -> new JoinCodeScreen(this);
             case SETUP -> new SetupScreen(this);
             case PLAYING -> new PlayingScreen(this);
