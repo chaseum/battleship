@@ -17,6 +17,7 @@ public class ScreenManager {
     // GUI-level game state
     private GuiGameSession.Mode plannedMode = GuiGameSession.Mode.CLASSIC_VS_AI;
     private GuiGameSession currentSession;
+    private String pendingJoinCode;
 
     public ScreenManager(Stage stage) {
         this.stage = stage;
@@ -37,6 +38,14 @@ public class ScreenManager {
 
     public void setCurrentSession(GuiGameSession session) {
         this.currentSession = session;
+    }
+
+    public String getPendingJoinCode() {
+        return pendingJoinCode;
+    }
+
+    public void setPendingJoinCode(String pendingJoinCode) {
+        this.pendingJoinCode = pendingJoinCode;
     }
 
     public void clearCurrentSession() {

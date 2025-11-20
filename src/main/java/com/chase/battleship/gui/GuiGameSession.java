@@ -3,6 +3,7 @@ package com.chase.battleship.gui;
 import com.chase.battleship.ai.DecisionTreeAI;
 import com.chase.battleship.ai.PlayerAgent;
 import com.chase.battleship.core.*;
+import com.chase.battleship.net.OnlinePeerConnection;
 
 public class GuiGameSession {
 
@@ -10,7 +11,11 @@ public class GuiGameSession {
         CLASSIC_VS_AI,
         NEORETRO_VS_AI,
         CLASSIC_LOCAL_2P,
-        NEORETRO_LOCAL_2P
+        NEORETRO_LOCAL_2P,
+        CLASSIC_ONLINE_HOST,
+        NEORETRO_ONLINE_HOST,
+        CLASSIC_ONLINE_CLIENT,
+        NEORETRO_ONLINE_CLIENT
     }
 
     private final Mode uiMode;
@@ -26,20 +31,39 @@ public class GuiGameSession {
     private final PlayerAgent p1Agent;
     private final PlayerAgent p2Agent;
 
+    private final PlayerState localPlayer;
+    private final PlayerState remotePlayer;
+
+    private final boolean online;
+    private final boolean isHost;
+    private final String lobbyCode;
+    private final OnlinePeerConnection net;
+    private final String joinCode;
+
     public GuiGameSession(Mode uiMode) {
+        this(uiMode, null);
+    }
+
+    public GuiGameSession(Mode uiMode, String joinCode) {
          this.uiMode = uiMode;
+        this.joinCode = joinCode;
 
-		this.config = switch (uiMode) {
-			case CLASSIC_VS_AI, CLASSIC_LOCAL_2P -> GameConfig.classic();
-			case NEORETRO_VS_AI, NEORETRO_LOCAL_2P -> GameConfig.neoRetroDefault();
-		};
+                this.config = switch (uiMode) {
+                        case CLASSIC_VS_AI, CLASSIC_LOCAL_2P, CLASSIC_ONLINE_HOST, CLASSIC_ONLINE_CLIENT -> GameConfig.classic();
+                        case NEORETRO_VS_AI, NEORETRO_LOCAL_2P, NEORETRO_ONLINE_HOST, NEORETRO_ONLINE_CLIENT -> GameConfig.neoRetroDefault();
+                };
 
-		Board b1 = new Board(config.getRows(), config.getCols());
-		Board b2 = new Board(config.getRows(), config.getCols());
+                Board b1 = new Board(config.getRows(), config.getCols());
+                Board b2 = new Board(config.getRows(), config.getCols());
 
-		// Use your existing helper – no fleet parameter
-		BoardUtils.randomFleetPlacement(b1);
-		BoardUtils.randomFleetPlacement(b2);
+                boolean randomize = switch (uiMode) {
+                    case CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
+                    default -> true;
+                };
+                if (randomize) {
+                    BoardUtils.randomFleetPlacement(b1);
+                    BoardUtils.randomFleetPlacement(b2);
+                }
 
 		PlayerState ps1 = new PlayerState("Player 1", b1, config);
 		PlayerState ps2 = new PlayerState("Player 2", b2, config);
@@ -60,12 +84,50 @@ public class GuiGameSession {
                 tmpP2Human = false;
                 tmpP1Agent = null;
                 tmpP2Agent = new DecisionTreeAI();
+                localPlayer = p1;
+                remotePlayer = p2;
+                online = false;
+                isHost = false;
+                lobbyCode = null;
+                net = null;
             }
             case CLASSIC_LOCAL_2P, NEORETRO_LOCAL_2P -> {
                 tmpP1Human = true;
                 tmpP2Human = true;
                 tmpP1Agent = null;
                 tmpP2Agent = null;
+                localPlayer = p1;
+                remotePlayer = p2;
+                online = false;
+                isHost = false;
+                lobbyCode = null;
+                net = null;
+            }
+            case CLASSIC_ONLINE_HOST, NEORETRO_ONLINE_HOST -> {
+                tmpP1Human = true;
+                tmpP2Human = false; // remote human
+                tmpP1Agent = null;
+                tmpP2Agent = null;
+                localPlayer = p1;
+                remotePlayer = p2;
+                online = true;
+                isHost = true;
+                OnlinePeerConnection conn = new OnlinePeerConnection(config, p1, p2, true, null);
+                net = conn;
+                lobbyCode = conn.getLobbyCode();
+            }
+            case CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> {
+                tmpP1Human = false; // host remote
+                tmpP2Human = true;
+                tmpP1Agent = null;
+                tmpP2Agent = null;
+                localPlayer = p2;
+                remotePlayer = p1;
+                online = true;
+                isHost = false;
+                OnlinePeerConnection conn = new OnlinePeerConnection(config, p1, p2, false, joinCode);
+                net = conn;
+                lobbyCode = null;
             }
             default -> throw new IllegalStateException("Unexpected value: " + uiMode);
         }
@@ -74,6 +136,26 @@ public class GuiGameSession {
         this.p2IsHuman = tmpP2Human;
         this.p1Agent = tmpP1Agent;
         this.p2Agent = tmpP2Agent;
+    }
+
+    public PlayerState getLocalPlayer() {
+        return localPlayer;
+    }
+
+    public PlayerState getRemotePlayer() {
+        return remotePlayer;
+    }
+
+    public boolean isOnline() {
+        return online;
+    }
+
+    public boolean isHost() {
+        return isHost;
+    }
+
+    public String getLobbyCode() {
+        return lobbyCode;
     }
 
     public Mode getUiMode() {
@@ -110,6 +192,9 @@ public class GuiGameSession {
 
     public boolean isCurrentPlayerHuman() {
         PlayerState current = state.getCurrentPlayer();
+        if (online) {
+            return current == localPlayer;
+        }
         if (current == p1) {
             return p1IsHuman;
         } else if (current == p2) {
@@ -119,6 +204,17 @@ public class GuiGameSession {
     }
 
     public TurnResult processHumanAction(TurnAction action) {
+        if (online) {
+            if (isHost) {
+                TurnResult res = engine.processTurn(action);
+                net.broadcastResult(action, res, state);
+                return res;
+            } else {
+                net.sendLocalMove(action);
+                OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
+                return new TurnResult(update.localResult().success(), update.remoteMessage(), state);
+            }
+        }
         return engine.processTurn(action);
     }
 
@@ -128,6 +224,21 @@ public class GuiGameSession {
         PlayerState current = state.getCurrentPlayer();
         boolean isP1 = (current == p1);
         PlayerAgent agent = isP1 ? p1Agent : p2Agent;
+
+        if (online) {
+            if (isHost) {
+                if (current == remotePlayer) {
+                    TurnAction action = net.waitForRemoteMove();
+                    TurnResult res = engine.processTurn(action);
+                    net.broadcastResult(action, res, state);
+                    return new TurnResult(res.success(), "Enemy: " + res.message(), state);
+                }
+                return null;
+            } else {
+                OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
+                return new TurnResult(update.localResult().success(), update.remoteMessage(), state);
+            }
+        }
 
         if (agent == null) {
             return null;
