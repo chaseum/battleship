@@ -11,6 +11,7 @@ import java.util.Stack;
 public class ScreenManager {
 
     private final Stage stage;
+    private final SettingsScreen settings = new SettingsScreen();
     private final Map<ScreenId, BaseScreen> screens = new EnumMap<>(ScreenId.class);
     private final Stack<ScreenId> navStack = new Stack<>();
 

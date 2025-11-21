@@ -8,16 +8,19 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.*;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import javafx.stage.Stage;
 
 public class PlayingScreen extends BaseScreen {
 
     private static final int CELL_SIZE = 28;
-    private static final Duration TURN_DELAY = Duration.millis(1200);
+    private static final double BASE_DELAY_MS = 650;
+    private static Duration TURN_DELAY = Duration.millis(BASE_DELAY_MS);
 
     private final BorderPane root;
     private final GridPane myGrid;
@@ -25,6 +28,9 @@ public class PlayingScreen extends BaseScreen {
     private final Label turnLabel;
     private final Label actionLabel;
     private final VBox bottomBox;
+    private final Label messageLabel;
+    private final HBox hotbar;
+    private final SettingsScreen settings = new SettingsScreen();
     private final java.util.List<Coordinate> sonarHighlights = new java.util.ArrayList<>();
 
     private Button sonarBtn;
@@ -40,6 +46,11 @@ public class PlayingScreen extends BaseScreen {
         root = new BorderPane();
         root.setStyle("-fx-background-color: #001b29;");
         root.setPadding(new Insets(20));
+        root.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                settingsPopup();
+            }
+        });
 
         turnLabel = new Label("Your turn");
         turnLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 20px;");
@@ -76,13 +87,22 @@ public class PlayingScreen extends BaseScreen {
         boardsBox.setAlignment(Pos.CENTER);
         root.setCenter(boardsBox);
 
+        messageLabel = new Label("");
+        messageLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 14px;");
+
         actionLabel = new Label("");
         actionLabel.setStyle("-fx-text-fill: #f0f0f0;");
 
-        bottomBox = new VBox(10);
+        hotbar = new HBox(10);
+        hotbar.setAlignment(Pos.CENTER);
+
+        bottomBox = new VBox(10, hotbar);
         bottomBox.setAlignment(Pos.CENTER);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
 
+        VBox centerStack = new VBox(10, messageLabel, boardsBox);
+        centerStack.setAlignment(Pos.CENTER);
+        root.setCenter(centerStack);
         root.setBottom(bottomBox);
     }
 
@@ -92,8 +112,7 @@ public class PlayingScreen extends BaseScreen {
         session = manager.getCurrentSession();
         if (session == null) {
             turnLabel.setText("No active game");
-            actionLabel.setText("");
-            bottomBox.getChildren().setAll(actionLabel);
+            messageLabel.setText("");
             return;
         }
         actionLabel.setTextFill(Color.web("#f0f0f0"));
@@ -130,11 +149,13 @@ public class PlayingScreen extends BaseScreen {
         if (enemyGrid.isDisable()) {
             actionLabel.setTextFill(Color.ORANGERED);
             actionLabel.setText("Not your turn");
+            messageLabel.setText("Not your turn");
             return;
         }
         if (!session.isCurrentPlayerHuman()) {
             actionLabel.setTextFill(Color.ORANGERED);
             actionLabel.setText("Not your turn");
+            messageLabel.setText("Not your turn");
             return;
         }
         if (session.getState().isGameOver()) return;
@@ -168,8 +189,9 @@ public class PlayingScreen extends BaseScreen {
         if (res != null) {
             actionLabel.setTextFill(Color.web("#f0f0f0"));
             actionLabel.setText("You: " + res.message());
+            messageLabel.setText(simplifyMessage(res.message()));
         }
-        maybeHighlightSonar(action);
+        maybeHighlightSonar(action, res == null ? null : res.message());
         syncFromState();
 
         if (session.getState().isGameOver()) {
@@ -210,6 +232,7 @@ public class PlayingScreen extends BaseScreen {
             if (autoRes != null) {
                 actionLabel.setTextFill(Color.web("#f0f0f0"));
                 actionLabel.setText(autoRes.message());
+                messageLabel.setText(simplifyMessage(autoRes.message()));
             }
             isProcessing = false;
             syncFromState();
@@ -302,7 +325,7 @@ public class PlayingScreen extends BaseScreen {
         bottomBox.getChildren().clear();
 
         if (session.getConfig().getGameMode() != GameMode.NEO_RETRO) {
-            bottomBox.getChildren().addAll(actionLabel);
+            bottomBox.getChildren().addAll(hotbar);
             return;
         }
 
@@ -317,7 +340,9 @@ public class PlayingScreen extends BaseScreen {
         HBox abilityRow = new HBox(10, sonarBtn, multiBtn, empBtn);
         abilityRow.setAlignment(Pos.CENTER);
 
-        bottomBox.getChildren().addAll(abilityRow, actionLabel);
+        hotbar.getChildren().clear();
+        hotbar.getChildren().add(abilityRow);
+        bottomBox.getChildren().add(hotbar);
         refreshAbilityButtons();
     }
 
@@ -344,6 +369,10 @@ public class PlayingScreen extends BaseScreen {
         sonarBtn.setDisable(!myTurn || locked || sonar == null || !sonar.isAvailable());
         multiBtn.setDisable(!myTurn || locked || multi == null || !multi.isAvailable());
         empBtn.setDisable(!myTurn || locked || emp == null || !emp.isAvailable());
+
+        sonarBtn.setOpacity(sonarBtn.isDisabled() ? 0.5 : 1.0);
+        multiBtn.setOpacity(multiBtn.isDisabled() ? 0.5 : 1.0);
+        empBtn.setOpacity(empBtn.isDisabled() ? 0.5 : 1.0);
     }
 
     private void useSonar() {
@@ -413,17 +442,43 @@ public class PlayingScreen extends BaseScreen {
         manager.show(ScreenId.DISCONNECTED);
     }
 
+    private String simplifyMessage(String message) {
+        if (message == null) return "";
+        String upper = message.toUpperCase();
+        if (upper.contains("SUNK")) return "SUNK";
+        if (upper.contains("HIT") && upper.contains("SHIELD")) return "HIT (Shielded)";
+        if (upper.contains("HIT")) return "HIT";
+        if (upper.contains("MISS")) return "MISS";
+        if (upper.contains("SONAR")) return "SONAR USED";
+        if (upper.contains("EMP")) return "EMP USED";
+        if (upper.contains("MULTISHOT")) return "MULTISHOT";
+        return message;
+    }
+
+    private void settingsPopup() {
+        var stage = (Stage) root.getScene().getWindow();
+        settings.show(stage, () -> {
+            double factor = settings.getSpeedFactor();
+            TURN_DELAY = Duration.millis(BASE_DELAY_MS / factor);
+        });
+    }
+
     @Override
     public Region getRoot() {
         return root;
     }
 
-    private void maybeHighlightSonar(TurnAction action) {
+    private void maybeHighlightSonar(TurnAction action, String message) {
         if (!(action instanceof UseAbilityAction abilityAction)) return;
         if (abilityAction.abilityType() != AbilityType.SONAR) return;
         AbilityTarget target = abilityAction.target();
         if (target == null || target.coordinate() == null) return;
-        setSonarHighlights(target.coordinate());
+        boolean hitsFound = message != null && message.contains("detected");
+        if (hitsFound) {
+            setSonarHighlights(target.coordinate());
+        } else {
+            clearSonarHighlights();
+        }
     }
 
     private void setSonarHighlights(Coordinate center) {
