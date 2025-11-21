@@ -19,12 +19,25 @@ public class GameConfig {
 		return new GameConfig(10, 10, GameMode.CLASSIC);
 	}
 
+	public static GameConfig classicLocal2p() {
+		return new GameConfig(10, 10, GameMode.CLASSIC_LOCAL_2P);
+	}
+
 	public static GameConfig neoRetroDefault() {
 		GameConfig cfg = new GameConfig(10, 10, GameMode.NEO_RETRO) ;
 		cfg.abilityRules.put(AbilityType.EMP, new AbilityRule(2,1)); // cd = 2, maxCharges = 1
 		cfg.abilityRules.put(AbilityType.MULTISHOT, new AbilityRule(3,2)); // cd = 3, maxCharges = 2
 		cfg.abilityRules.put(AbilityType.SHIELD, new AbilityRule(2,2));
 		cfg.abilityRules.put(AbilityType.SONAR, new AbilityRule(2,3)); 
+		return cfg;
+	}
+
+	public static GameConfig neoRetroLocal2p() {
+		GameConfig cfg = new GameConfig(10, 10, GameMode.NEORETRO_LOCAL_2P);
+		cfg.abilityRules.put(AbilityType.EMP, new AbilityRule(2,1));
+		cfg.abilityRules.put(AbilityType.MULTISHOT, new AbilityRule(3,2));
+		cfg.abilityRules.put(AbilityType.SHIELD, new AbilityRule(2,2));
+		cfg.abilityRules.put(AbilityType.SONAR, new AbilityRule(2,3));
 		return cfg;
 	}
 

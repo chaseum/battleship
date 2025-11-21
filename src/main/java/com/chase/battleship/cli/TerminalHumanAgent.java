@@ -19,7 +19,7 @@ public class TerminalHumanAgent implements PlayerAgent {
         PlayerState me = gameState.getCurrentPlayer();
         GameConfig cfg = gameState.getConfig();
 
-        if (cfg.getGameMode() == GameMode.NEO_RETRO &&
+        if (cfg.getGameMode().isNeoRetro() &&
             me.getAbilities() != null &&
             !me.abilitiesLocked()) {
 

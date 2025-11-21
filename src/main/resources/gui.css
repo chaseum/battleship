@@ -1,0 +1,21 @@
+.minecraft-slider {
+    -fx-pref-height: 20;
+    -fx-background-color: transparent;
+}
+
+.minecraft-slider .track {
+    -fx-background-color: #3a3a3a;
+    -fx-background-insets: 0;
+    -fx-background-radius: 2;
+    -fx-padding: 2;
+    -fx-effect: dropshadow(one-pass-box, #111, 2, 0, 0, 1);
+}
+
+.minecraft-slider .thumb {
+    -fx-background-color: linear-gradient(#d0d0d0, #8a8a8a);
+    -fx-background-insets: 0;
+    -fx-background-radius: 2;
+    -fx-pref-width: 12;
+    -fx-pref-height: 18;
+    -fx-effect: dropshadow(one-pass-box, #000, 2, 0, 0, 1);
+}

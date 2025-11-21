@@ -5,7 +5,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 /**
@@ -14,7 +17,9 @@ import javafx.scene.layout.VBox;
  */
 public class HostLobbyScreen extends BaseScreen {
 
-    private final VBox root;
+    private final StackPane root;
+    private final VBox contentBox;
+    private final MenuSettingsOverlay settingsOverlay;
     private final Label codeLabel;
     private final Label statusLabel;
     private final Button waitButton;
@@ -26,10 +31,10 @@ public class HostLobbyScreen extends BaseScreen {
     public HostLobbyScreen(ScreenManager manager) {
         super(manager);
 
-        root = new VBox(18);
-        root.setAlignment(Pos.CENTER);
-        root.setPadding(new Insets(40));
-        root.setStyle("-fx-background-color: #001b29;");
+        contentBox = new VBox(18);
+        contentBox.setAlignment(Pos.CENTER);
+        contentBox.setPadding(new Insets(40));
+        contentBox.setStyle("-fx-background-color: #001b29;");
 
         Label title = new Label("Host Lobby");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
@@ -59,8 +64,9 @@ public class HostLobbyScreen extends BaseScreen {
         retryButton.setVisible(false);
         retryButton.setOnAction(e -> beginSessionSetup());
 
-        Button backBtn = new Button("Cancel");
-        backBtn.setOnAction(e -> {
+        contentBox.getChildren().addAll(title, info, codeLabel, statusLabel, waitButton, retryButton);
+
+        settingsOverlay = new MenuSettingsOverlay(() -> {
             stopWaiting();
             if (session != null) {
                 session.close();
@@ -68,12 +74,20 @@ public class HostLobbyScreen extends BaseScreen {
             manager.clearCurrentSession();
             manager.goBack();
         });
-
-        root.getChildren().addAll(title, info, codeLabel, statusLabel, waitButton, retryButton, backBtn);
+        StackPane wrapped = settingsOverlay.wrap(contentBox);
+        wrapped.setStyle("-fx-background-color: #001b29;");
+        wrapped.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                settingsOverlay.toggle();
+                e.consume();
+            }
+        });
+        root = wrapped;
     }
 
     @Override
     public void onShow() {
+        settingsOverlay.hide();
         beginSessionSetup();
     }
 

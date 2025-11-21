@@ -1,5 +1,6 @@
 package com.chase.battleship.gui;
 
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -7,9 +8,11 @@ import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
-import javafx.application.Platform;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 /**
@@ -18,7 +21,9 @@ import javafx.scene.layout.VBox;
  */
 public class JoinCodeScreen extends BaseScreen {
 
-    private final VBox root;
+    private final StackPane root;
+    private final VBox formBox;
+    private final MenuSettingsOverlay settingsOverlay;
     private final Label errorLabel;
     private final Button joinBtn;
     private final TextField codeField;
@@ -28,10 +33,10 @@ public class JoinCodeScreen extends BaseScreen {
     public JoinCodeScreen(ScreenManager manager) {
         super(manager);
 
-        root = new VBox(15);
-        root.setAlignment(Pos.CENTER);
-        root.setPadding(new Insets(40));
-        root.setStyle("-fx-background-color: #001b29;");
+        formBox = new VBox(15);
+        formBox.setAlignment(Pos.CENTER);
+        formBox.setPadding(new Insets(40));
+        formBox.setStyle("-fx-background-color: #001b29;");
 
         Label title = new Label("Join Game");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
@@ -61,8 +66,6 @@ public class JoinCodeScreen extends BaseScreen {
         codeField.setMaxWidth(250); // <-- much smaller than full width
 
         joinBtn = new Button("Join Game");
-        Button backBtn = new Button("Back");
-
         errorLabel = new Label("");
         errorLabel.setStyle("-fx-text-fill: #ff6666;");
 
@@ -98,15 +101,24 @@ public class JoinCodeScreen extends BaseScreen {
             joinThread.start();
         });
 
-        backBtn.setOnAction(e -> {
+        formBox.getChildren().addAll(title, info, modeRow, codeField, joinBtn, errorLabel);
+
+        settingsOverlay = new MenuSettingsOverlay(() -> {
             if (manager.getCurrentSession() != null) {
                 manager.getCurrentSession().close();
             }
             manager.clearCurrentSession();
             manager.goBack();
         });
-
-        root.getChildren().addAll(title, info, modeRow, codeField, joinBtn, backBtn, errorLabel);
+        StackPane wrapped = settingsOverlay.wrap(formBox);
+        wrapped.setStyle("-fx-background-color: #001b29;");
+        wrapped.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                settingsOverlay.toggle();
+                e.consume();
+            }
+        });
+        root = wrapped;
     }
 
     @Override
@@ -123,5 +135,6 @@ public class JoinCodeScreen extends BaseScreen {
             manager.getCurrentSession().close();
         }
         manager.clearCurrentSession();
+        settingsOverlay.hide();
     }
 }

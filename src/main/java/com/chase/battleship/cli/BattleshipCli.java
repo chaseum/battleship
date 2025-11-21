@@ -117,7 +117,7 @@ public class BattleshipCli {
 		System.out.println("Enemy board (what you know):");
 		BoardPrinter.printBoard(current.getTrackingBoard(), false);
 
-		if (state.getConfig().getGameMode() == GameMode.NEO_RETRO &&
+		if (state.getConfig().getGameMode().isNeoRetro() &&
 			current.getAbilities() != null) {
 
 			System.out.println("Abilities:");

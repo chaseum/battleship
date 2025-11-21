@@ -11,7 +11,7 @@ public class PlayerState {
 		this.name = name;
 		this.ownBoard = ownBoard;
 		this.trackingBoard = new Board(ownBoard.getRows(), ownBoard.getCols());
-		this.abilities = config.getGameMode() == GameMode.NEO_RETRO
+		this.abilities = config.getGameMode().isNeoRetro()
 			? new PlayerAbilities(config.getAbilityRules())
 			: null;
 		this.empLockTurnsRemaining = 0;

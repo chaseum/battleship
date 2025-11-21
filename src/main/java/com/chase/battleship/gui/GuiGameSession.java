@@ -51,20 +51,31 @@ public class GuiGameSession {
         this.joinCode = joinCode;
 
                 this.config = switch (uiMode) {
-                        case CLASSIC_VS_AI, CLASSIC_LOCAL_2P, CLASSIC_ONLINE_HOST, CLASSIC_ONLINE_CLIENT -> GameConfig.classic();
-                        case NEORETRO_VS_AI, NEORETRO_LOCAL_2P, NEORETRO_ONLINE_HOST, NEORETRO_ONLINE_CLIENT -> GameConfig.neoRetroDefault();
+                        case CLASSIC_VS_AI, CLASSIC_ONLINE_HOST, CLASSIC_ONLINE_CLIENT -> GameConfig.classic();
+                        case NEORETRO_VS_AI, NEORETRO_ONLINE_HOST, NEORETRO_ONLINE_CLIENT -> GameConfig.neoRetroDefault();
+                        case CLASSIC_LOCAL_2P -> GameConfig.classicLocal2p();
+                        case NEORETRO_LOCAL_2P -> GameConfig.neoRetroLocal2p();
                 };
 
                 Board b1 = new Board(config.getRows(), config.getCols());
                 Board b2 = new Board(config.getRows(), config.getCols());
 
-                boolean randomize = switch (uiMode) {
-                    case CLASSIC_ONLINE_HOST, NEORETRO_ONLINE_HOST,
-                            CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
-                    default -> true;
+                boolean randomizeP1 = switch (uiMode) {
+                    case CLASSIC_VS_AI, NEORETRO_VS_AI -> false;
+                    case CLASSIC_LOCAL_2P, NEORETRO_LOCAL_2P -> false;
+                    case CLASSIC_ONLINE_HOST, NEORETRO_ONLINE_HOST, CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
                 };
-                if (randomize) {
+
+                boolean randomizeP2 = switch (uiMode) {
+                    case CLASSIC_VS_AI, NEORETRO_VS_AI -> true; // AI gets random fleet
+                    case CLASSIC_LOCAL_2P, NEORETRO_LOCAL_2P -> false;
+                    case CLASSIC_ONLINE_HOST, NEORETRO_ONLINE_HOST, CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
+                };
+
+                if (randomizeP1) {
                     BoardUtils.randomFleetPlacement(b1);
+                }
+                if (randomizeP2) {
                     BoardUtils.randomFleetPlacement(b2);
                 }
 

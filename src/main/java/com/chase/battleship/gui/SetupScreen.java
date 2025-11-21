@@ -5,6 +5,8 @@ import com.chase.battleship.core.CellState;
 import com.chase.battleship.core.Coordinate;
 import com.chase.battleship.core.Ship;
 import com.chase.battleship.core.ShipType;
+import com.chase.battleship.core.GameMode;
+import com.chase.battleship.core.BoardUtils;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -37,6 +39,7 @@ public class SetupScreen extends BaseScreen {
     private GuiGameSession session;
     private ShipType selectedShip = null;
     private boolean placeHorizontal = true;
+    private boolean placingSecondPlayer = false;
 
     public SetupScreen(ScreenManager manager) {
         super(manager);
@@ -59,13 +62,20 @@ public class SetupScreen extends BaseScreen {
         boardGrid = createEmptyGrid(10, 10);
         gridWithLabels = wrapWithLabels(boardGrid);
 
-        shipPalette = new VBox(10);
-        shipPalette.setAlignment(Pos.TOP_CENTER);
-        shipPalette.setPadding(new Insets(0, 10, 0, 0));
+        shipPalette = new VBox(16);
+        shipPalette.setAlignment(Pos.CENTER);
+        shipPalette.setFillWidth(false);
+        shipPalette.setPadding(new Insets(0, 10, 0, 10));
         rebuildShipPalette();
 
-        HBox centerBox = new HBox(shipPalette, gridWithLabels);
-        centerBox.setAlignment(Pos.CENTER); // center the grid
+        VBox paletteWrapper = new VBox(shipPalette);
+        paletteWrapper.setAlignment(Pos.CENTER);
+        paletteWrapper.setMinWidth(CELL_SIZE * 4);
+        paletteWrapper.setMinHeight(CELL_SIZE * 12);
+        paletteWrapper.setPadding(new Insets(0, 10, 0, 0));
+
+        HBox centerBox = new HBox(24, paletteWrapper, gridWithLabels);
+        centerBox.setAlignment(Pos.CENTER); // center the grid and palette together
         root.setCenter(centerBox);
 
         // bottom controls
@@ -110,7 +120,16 @@ public class SetupScreen extends BaseScreen {
         } else {
             session = existing;
         }
-        if (session.isOnline() && session.isHost()) {
+        placingSecondPlayer = false;
+        selectedShip = null;
+        placeHorizontal = true;
+
+        boolean localTwoP = isLocalTwoPlayer();
+        if (localTwoP) {
+            session.getLocalPlayer().getOwnBoard().reset();
+            session.getRemotePlayer().getOwnBoard().reset();
+            subtitleLabel.setText("Player 1: place your ships.");
+        } else if (session.isOnline() && session.isHost()) {
             subtitleLabel.setText("Lobby code: " + session.getLobbyCode());
         } else {
             subtitleLabel.setText("");
@@ -125,7 +144,9 @@ public class SetupScreen extends BaseScreen {
 
     private void autoSetup() {
         if (session == null) return;
-        session.randomizeLocalFleet();
+        Board target = getCurrentPlacementBoard();
+        target.reset();
+        BoardUtils.randomFleetPlacement(target);
         selectedShip = null;
         placeHorizontal = true;
         readyBtn.setDisable(false);
@@ -136,10 +157,29 @@ public class SetupScreen extends BaseScreen {
 
     private void handleReady() {
         if (session == null) return;
-        Board board = session.getLocalPlayer().getOwnBoard();
+        Board board = getCurrentPlacementBoard();
+        if (board == null) return;
         if (board.getShips().size() < ShipType.values().length) {
             subtitleLabel.setText("Place all ships before readying up.");
             return;
+        }
+
+        boolean localTwoP = isLocalTwoPlayer();
+        if (localTwoP && !placingSecondPlayer) {
+            // Move to player 2 placement
+            placingSecondPlayer = true;
+            selectedShip = null;
+            placeHorizontal = true;
+            subtitleLabel.setText("Player 2: place your ships.");
+            session.getRemotePlayer().getOwnBoard().reset();
+            refreshBoardView();
+            rebuildShipPalette();
+            clearPreview();
+            return;
+        }
+
+        if (localTwoP) {
+            placingSecondPlayer = false;
         }
 
         if (!session.isOnline()) {
@@ -193,7 +233,8 @@ public class SetupScreen extends BaseScreen {
     private void refreshBoardView() {
         if (session == null) return;
 
-        Board board = session.getLocalPlayer().getOwnBoard();
+        Board board = getCurrentPlacementBoard();
+        if (board == null) return;
         for (Node node : boardGrid.getChildren()) {
             if (!(node instanceof Rectangle rect)) continue;
             Integer cIdx = GridPane.getColumnIndex(node);
@@ -213,7 +254,7 @@ public class SetupScreen extends BaseScreen {
 
     private void handleCellClick(int row, int col) {
         if (session == null || selectedShip == null) return;
-        Board board = session.getLocalPlayer().getOwnBoard();
+        Board board = getCurrentPlacementBoard();
         Coordinate start = new Coordinate(row, col);
         if (!board.canPlaceShip(selectedShip, start, placeHorizontal)) {
             subtitleLabel.setText("Cannot place " + selectedShip + " here.");
@@ -249,7 +290,7 @@ public class SetupScreen extends BaseScreen {
 
     private void resetManual() {
         if (session == null) return;
-        session.getLocalPlayer().getOwnBoard().reset();
+        getCurrentPlacementBoard().reset();
         selectedShip = null;
         placeHorizontal = true;
         readyBtn.setDisable(false);
@@ -264,7 +305,7 @@ public class SetupScreen extends BaseScreen {
         shipPalette.getChildren().clear();
         Label header = new Label("Ships");
         shipPalette.getChildren().add(header);
-        Board board = session == null ? null : session.getLocalPlayer().getOwnBoard();
+        Board board = getCurrentPlacementBoard();
         if (board == null) return;
 
         java.util.EnumSet<ShipType> placed = java.util.EnumSet.noneOf(ShipType.class);
@@ -351,7 +392,8 @@ public class SetupScreen extends BaseScreen {
         previewCells.clear();
         previewAnchorRow = anchorRow;
         previewAnchorCol = anchorCol;
-        Board board = session.getLocalPlayer().getOwnBoard();
+        Board board = getCurrentPlacementBoard();
+        if (board == null) return;
         Coordinate start = new Coordinate(anchorRow, anchorCol);
         previewValid = board.canPlaceShip(selectedShip, start, placeHorizontal);
 
@@ -375,5 +417,18 @@ public class SetupScreen extends BaseScreen {
     private void attemptPlaceFromPreview() {
         if (selectedShip == null || !previewValid || previewAnchorRow < 0) return;
         handleCellClick(previewAnchorRow, previewAnchorCol);
+    }
+
+    private Board getCurrentPlacementBoard() {
+        if (session == null) return null;
+        if (placingSecondPlayer) {
+            return session.getRemotePlayer().getOwnBoard();
+        }
+        return session.getLocalPlayer().getOwnBoard();
+    }
+
+    private boolean isLocalTwoPlayer() {
+        GameMode mode = session != null ? session.getConfig().getGameMode() : null;
+        return mode != null && mode.isLocalTwoPlayer();
     }
 }

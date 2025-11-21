@@ -1,64 +1,71 @@
 package com.chase.battleship.gui;
 
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 public class SinglePlayerScreen extends BaseScreen {
 
-    private final VBox root;
+    private final StackPane root;
+    private final RetroMenu menu;
+    private final MenuSettingsOverlay settingsOverlay;
 
     public SinglePlayerScreen(ScreenManager manager) {
         super(manager);
 
-        root = new VBox(15);
-        root.setPadding(new Insets(40));
-        root.setAlignment(Pos.CENTER);
-        root.setStyle("-fx-background-color: #001b29;");
-
         Label title = new Label("Single Player");
-        title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
+        title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px; -fx-font-family: 'Consolas';");
 
-        Button classicVsAi = new Button("Classic vs AI");
-        Button neoVsAi = new Button("Neo-Retro vs AI");
-        Button classicLocal = new Button("Classic Local 2P");
-        Button neoLocal = new Button("Neo-Retro Local 2P");
-        Button back = new Button("Back");
+        menu = new RetroMenu(java.util.List.of(
+                new RetroMenu.Option("Classic vs AI", () -> {
+                    manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_VS_AI);
+                    manager.clearCurrentSession();
+                    manager.show(ScreenId.SETUP);
+                }),
+                new RetroMenu.Option("Neo-Retro vs AI", () -> {
+                    manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_VS_AI);
+                    manager.clearCurrentSession();
+                    manager.show(ScreenId.SETUP);
+                })
+        ));
 
-        classicVsAi.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_VS_AI);
-            manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
+        Label hint = new Label("Arrow keys / Enter or mouse. Esc for settings/back.");
+        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 12px;");
+
+        VBox layout = new VBox(18, title, menu, hint);
+        layout.setAlignment(Pos.CENTER);
+        layout.setStyle("-fx-padding: 40;");
+
+        settingsOverlay = new MenuSettingsOverlay(manager::goBack);
+        StackPane wrapped = settingsOverlay.wrap(layout);
+        wrapped.setStyle("-fx-background-color: linear-gradient(#0b2a42, #03121f);");
+        wrapped.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                settingsOverlay.toggle();
+                e.consume();
+                return;
+            }
+            if (settingsOverlay.isVisible()) return;
+            if (menu.handleKey(e.getCode())) {
+                e.consume();
+            }
         });
-
-        neoVsAi.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_VS_AI);
-            manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
-        });
-
-        classicLocal.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_LOCAL_2P);
-            manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
-        });
-
-        neoLocal.setOnAction(e -> {
-            manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_LOCAL_2P);
-            manager.clearCurrentSession();
-            manager.show(ScreenId.SETUP);
-        });
-
-        back.setOnAction(e -> manager.goBack());
-
-        root.getChildren().addAll(title, classicVsAi, neoVsAi, classicLocal, neoLocal, back);
+        wrapped.setOnMouseClicked(e -> wrapped.requestFocus());
+        root = wrapped;
     }
 
     @Override
     public Region getRoot() {
         return root;
+    }
+
+    @Override
+    public void onShow() {
+        settingsOverlay.hide();
+        menu.focusFirst();
+        root.requestFocus();
     }
 }

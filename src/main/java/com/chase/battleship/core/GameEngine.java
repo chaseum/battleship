@@ -57,7 +57,7 @@ public class GameEngine {
     }
 
     private String handleAbility(PlayerState current, PlayerState other, UseAbilityAction use) {
-        if (gameState.getConfig().getGameMode() != GameMode.NEO_RETRO) {
+        if (!gameState.getConfig().getGameMode().isNeoRetro()) {
             return "Abilities not available in Classic mode";
         }
 

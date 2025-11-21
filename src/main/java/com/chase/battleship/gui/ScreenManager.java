@@ -73,6 +73,10 @@ public class ScreenManager {
         if (scene == null) {
             scene = new Scene(root, 1280, 720);
             scene.setCursor(javafx.scene.Cursor.CROSSHAIR);
+            var css = ScreenManager.class.getResource("/gui.css");
+            if (css != null) {
+                scene.getStylesheets().add(css.toExternalForm());
+            }
             stage.setScene(scene);
         } else {
             scene.setRoot(root);

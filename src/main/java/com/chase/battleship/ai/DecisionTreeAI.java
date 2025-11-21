@@ -15,7 +15,7 @@ public class DecisionTreeAI implements PlayerAgent {
 		PlayerState enemy = gameState.getOtherPlayer();
 
 		// decision tree root: are abilities available & beneficial?
-		if(gameState.getConfig().getGameMode() == GameMode.NEO_RETRO) {
+		if(gameState.getConfig().getGameMode().isNeoRetro()) {
 			TurnAction abilityAction = maybeUseAbility(gameState, me, enemy);
 			if(abilityAction != null) {
 				return abilityAction;
@@ -27,7 +27,7 @@ public class DecisionTreeAI implements PlayerAgent {
 	}
 
 	private TurnAction maybeUseAbility(GameState gameState, PlayerState me, PlayerState enemy) {
-		if (gameState.getConfig().getGameMode() != GameMode.NEO_RETRO) {
+		if (!gameState.getConfig().getGameMode().isNeoRetro()) {
 			return null;
 		}
 		if (me.abilitiesLocked() || me.getAbilities() == null) {

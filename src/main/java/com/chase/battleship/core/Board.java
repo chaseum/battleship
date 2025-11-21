@@ -41,6 +41,9 @@ public class Board {
 			if(!inBounds(coord) || grid[r][c] != CellState.EMPTY) {
 				return false;
 			}
+			if (isAdjacentOccupied(r, c)) {
+				return false;
+			}
 		}
 		return true;
 	}
@@ -58,6 +61,25 @@ public class Board {
 			grid[r][c] = CellState.SHIP;
 		}
 		ships.add(ship);
+	}
+
+	/**
+	 * Returns true if any of the 8 neighboring cells (including diagonals)
+	 * already contain a ship segment. Used to enforce no-touch placement.
+	 */
+	private boolean isAdjacentOccupied(int r, int c) {
+		for (int dr = -1; dr <= 1; dr++) {
+			for (int dc = -1; dc <= 1; dc++) {
+				if (dr == 0 && dc == 0) continue;
+				int nr = r + dr;
+				int nc = c + dc;
+				if (!inBounds(nr, nc)) continue;
+				if (grid[nr][nc] == CellState.SHIP) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	public ShotOutcome fireAt(Coordinate target) {

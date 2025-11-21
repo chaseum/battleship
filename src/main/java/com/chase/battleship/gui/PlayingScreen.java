@@ -30,7 +30,11 @@ public class PlayingScreen extends BaseScreen {
     private final VBox bottomBox;
     private final Label messageLabel;
     private final HBox hotbar;
+    private final VBox fleetPanel;
+    private final Label fleetTitle;
     private final Pane settingsOverlay;
+    private final Pane handoffOverlay;
+    private final Label handoffLabel;
     private final Slider volumeSlider;
     private final Slider speedSlider;
     private final java.util.List<Coordinate> sonarHighlights = new java.util.ArrayList<>();
@@ -41,6 +45,9 @@ public class PlayingScreen extends BaseScreen {
 
     private GuiGameSession session;
     private boolean isProcessing = false;
+    private boolean waitingForHandOff = false;
+    private PlayerState lastTurnOwner = null;
+    private boolean isLocalTwoP = false;
 
     public PlayingScreen(ScreenManager manager) {
         super(manager);
@@ -57,16 +64,7 @@ public class PlayingScreen extends BaseScreen {
         turnLabel = new Label("Your turn");
         turnLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 20px;");
 
-        Button backBtn = new Button("Back");
-        backBtn.setOnAction(e -> {
-            if (manager.getCurrentSession() != null) {
-                manager.getCurrentSession().close();
-            }
-            manager.clearCurrentSession();
-            manager.show(ScreenId.TITLE);
-        });
-
-        HBox topBar = new HBox(10, turnLabel, backBtn);
+        HBox topBar = new HBox(10, turnLabel);
         topBar.setAlignment(Pos.TOP_LEFT);
         root.setTop(topBar);
 
@@ -85,9 +83,18 @@ public class PlayingScreen extends BaseScreen {
         VBox enemyBox = new VBox(8, enemyLabel, wrapWithLabels(enemyGrid));
         enemyBox.setAlignment(Pos.CENTER);
 
+        fleetTitle = new Label("Your Fleet");
+        fleetTitle.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 16px;");
+        fleetPanel = new VBox(10);
+        fleetPanel.setAlignment(Pos.CENTER_LEFT);
+        fleetPanel.setMinWidth(160);
+        fleetPanel.getChildren().add(fleetTitle);
+
         HBox boardsBox = new HBox(80, myBox, enemyBox);
         boardsBox.setAlignment(Pos.CENTER);
-        root.setCenter(boardsBox);
+
+        HBox mainRow = new HBox(30, fleetPanel, boardsBox);
+        mainRow.setAlignment(Pos.CENTER);
 
         messageLabel = new Label("");
         messageLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 14px;");
@@ -102,28 +109,44 @@ public class PlayingScreen extends BaseScreen {
         bottomBox.setAlignment(Pos.CENTER);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
 
-        VBox centerStack = new VBox(10, messageLabel, boardsBox);
+        VBox centerStack = new VBox(10, messageLabel, mainRow);
         centerStack.setAlignment(Pos.CENTER);
 
         // settings overlay
         volumeSlider = new Slider(0, 1, 0.5);
-        volumeSlider.setShowTickMarks(true);
-        volumeSlider.setShowTickLabels(true);
-        volumeSlider.setMajorTickUnit(0.5);
+        volumeSlider.setShowTickMarks(false);
+        volumeSlider.setShowTickLabels(false);
+        volumeSlider.setSnapToTicks(true);
+        volumeSlider.setMajorTickUnit(0.1);
+        volumeSlider.setBlockIncrement(0.1);
+        volumeSlider.getStyleClass().add("minecraft-slider");
 
         speedSlider = new Slider(0.5, 2.0, 1.0);
-        speedSlider.setShowTickMarks(true);
-        speedSlider.setShowTickLabels(true);
-        speedSlider.setMajorTickUnit(0.5);
+        speedSlider.setShowTickMarks(false);
+        speedSlider.setShowTickLabels(false);
+        speedSlider.setSnapToTicks(true);
+        speedSlider.setMajorTickUnit(0.1);
+        speedSlider.setBlockIncrement(0.1);
+        speedSlider.getStyleClass().add("minecraft-slider");
         speedSlider.valueProperty().addListener((obs, ov, nv) -> TURN_DELAY = Duration.millis(BASE_DELAY_MS / nv.doubleValue()));
 
         Button closeSettings = new Button("Close");
         closeSettings.setOnAction(e -> toggleSettingsOverlay());
+        Button backFromSettings = new Button("Back to Title");
+        backFromSettings.setOnAction(e -> {
+            toggleSettingsOverlay();
+            if (manager.getCurrentSession() != null) {
+                manager.getCurrentSession().close();
+            }
+            manager.clearCurrentSession();
+            manager.show(ScreenId.TITLE);
+        });
 
         VBox settingsBox = new VBox(10,
                 new Label("Settings"),
                 new Label("Volume"), volumeSlider,
                 new Label("Game Speed"), speedSlider,
+                backFromSettings,
                 closeSettings);
         settingsBox.setAlignment(Pos.CENTER);
         settingsBox.setPadding(new Insets(20));
@@ -137,7 +160,23 @@ public class PlayingScreen extends BaseScreen {
         StackPane.setAlignment(settingsBox, Pos.CENTER);
         settingsOverlay = overlayPane;
 
-        StackPane mainLayer = new StackPane(centerStack, settingsOverlay);
+        // handoff overlay for local 2P
+        handoffLabel = new Label("");
+        Button handoffBtn = new Button("Ready");
+        VBox handoffBox = new VBox(10, handoffLabel, handoffBtn);
+        handoffBox.setAlignment(Pos.CENTER);
+        handoffBox.setPadding(new Insets(20));
+        handoffBox.setMaxWidth(300);
+        handoffBox.setStyle("-fx-background-color: rgba(0,0,0,0.85); -fx-text-fill: #f0f0f0; -fx-border-color: #00ffcc; -fx-border-width: 1;");
+        StackPane handoffPane = new StackPane(handoffBox);
+        handoffPane.setStyle("-fx-background-color: rgba(0,0,0,0.5);");
+        handoffPane.setVisible(false);
+        handoffPane.setMouseTransparent(true);
+        StackPane.setAlignment(handoffBox, Pos.CENTER);
+        handoffOverlay = handoffPane;
+        handoffBtn.setOnAction(e -> hideHandOffOverlay());
+
+        StackPane mainLayer = new StackPane(centerStack, settingsOverlay, handoffOverlay);
         root.setCenter(mainLayer);
         root.setBottom(bottomBox);
     }
@@ -152,8 +191,12 @@ public class PlayingScreen extends BaseScreen {
             return;
         }
         actionLabel.setTextFill(Color.web("#f0f0f0"));
+        isLocalTwoP = session.getConfig().getGameMode().isLocalTwoPlayer();
+        lastTurnOwner = session.getState().getCurrentPlayer();
+        waitingForHandOff = false;
 
         setupAbilityButtons();
+        hideHandOffOverlay();
         syncFromState();
         triggerRemoteIfNeeded();
         root.requestFocus();
@@ -183,6 +226,7 @@ public class PlayingScreen extends BaseScreen {
 
     private void handleEnemyClick(int row, int col) {
         if (session == null || isProcessing) return;
+        if (waitingForHandOff) return;
         if (enemyGrid.isDisable()) {
             actionLabel.setTextFill(Color.ORANGERED);
             actionLabel.setText("Not your turn");
@@ -287,17 +331,34 @@ public class PlayingScreen extends BaseScreen {
         GameState gs = session.getState();
         PlayerState current = gs.getCurrentPlayer();
 
-        PlayerState me = session.getLocalPlayer();
-        PlayerState enemy = session.getRemotePlayer();
+        boolean turnChanged = isLocalTwoP && current != lastTurnOwner && !gs.isGameOver();
+        if (turnChanged && !waitingForHandOff) {
+            showHandOffOverlay(current);
+        }
+
+        PlayerState me;
+        PlayerState enemy;
+        if (isLocalTwoP) {
+            if (waitingForHandOff && lastTurnOwner != null) {
+                me = lastTurnOwner; // keep previous player's perspective until ready
+            } else {
+                me = current;
+            }
+            enemy = (me == current) ? gs.getOtherPlayer() : current;
+        } else {
+            me = session.getLocalPlayer();
+            enemy = session.getRemotePlayer();
+        }
 
         Board myBoard = me.getOwnBoard();
         Board myTracking = me.getTrackingBoard();
 
         redrawOwnBoard(myBoard);
         redrawEnemyBoard(myTracking);
+        refreshFleetPanel(me);
 
         boolean currentHuman = session.isCurrentPlayerHuman();
-        if (current == me && currentHuman) {
+        if (current == me && currentHuman && !waitingForHandOff) {
             turnLabel.setText("Your turn");
         } else if (!currentHuman) {
             turnLabel.setText("Opponent's turn");
@@ -305,7 +366,7 @@ public class PlayingScreen extends BaseScreen {
             // local 2-player, but still helpful:
             turnLabel.setText(current.getName() + "'s turn");
         }
-        enemyGrid.setDisable(!currentHuman || session.getState().isGameOver() || isProcessing);
+        enemyGrid.setDisable(!currentHuman || session.getState().isGameOver() || isProcessing || waitingForHandOff);
 
         refreshAbilityButtons();
     }
@@ -361,7 +422,7 @@ public class PlayingScreen extends BaseScreen {
     private void setupAbilityButtons() {
         bottomBox.getChildren().clear();
 
-        if (session.getConfig().getGameMode() != GameMode.NEO_RETRO) {
+        if (!session.getConfig().getGameMode().isNeoRetro()) {
             bottomBox.getChildren().addAll(hotbar);
             return;
         }
@@ -385,9 +446,10 @@ public class PlayingScreen extends BaseScreen {
 
     private void refreshAbilityButtons() {
         if (session == null) return;
-        if (session.getConfig().getGameMode() != GameMode.NEO_RETRO) return;
+        if (!session.getConfig().getGameMode().isNeoRetro()) return;
+        if (sonarBtn == null || multiBtn == null || empBtn == null) return;
 
-        PlayerState me = session.getLocalPlayer();
+        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
         if (me.getAbilities() == null) {
             sonarBtn.setDisable(true);
             multiBtn.setDisable(true);
@@ -397,7 +459,7 @@ public class PlayingScreen extends BaseScreen {
 
         PlayerAbilities abilities = me.getAbilities();
         boolean locked = me.abilitiesLocked();
-        boolean myTurn = session.isCurrentPlayerHuman() && !session.getState().isGameOver() && !isProcessing;
+        boolean myTurn = session.isCurrentPlayerHuman() && !session.getState().isGameOver() && !isProcessing && !waitingForHandOff;
 
         AbilityStatus sonar = abilities.getStatus(AbilityType.SONAR);
         AbilityStatus multi = abilities.getStatus(AbilityType.MULTISHOT);
@@ -415,7 +477,8 @@ public class PlayingScreen extends BaseScreen {
     private void useSonar() {
         if (session == null || isProcessing) return;
         if (!session.isCurrentPlayerHuman()) return;
-        if (session.getLocalPlayer().abilitiesLocked()) {
+        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
+        if (me.abilitiesLocked()) {
             actionLabel.setText("Abilities disabled by EMP!");
             return;
         }
@@ -432,7 +495,8 @@ public class PlayingScreen extends BaseScreen {
     private void useMultishot() {
         if (session == null || isProcessing) return;
         if (!session.isCurrentPlayerHuman()) return;
-        if (session.getLocalPlayer().abilitiesLocked()) {
+        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
+        if (me.abilitiesLocked()) {
             actionLabel.setText("Abilities disabled by EMP!");
             return;
         }
@@ -448,7 +512,8 @@ public class PlayingScreen extends BaseScreen {
     private void useEmp() {
         if (session == null || isProcessing) return;
         if (!session.isCurrentPlayerHuman()) return;
-        if (session.getLocalPlayer().abilitiesLocked()) {
+        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
+        if (me.abilitiesLocked()) {
             actionLabel.setText("Abilities disabled by EMP!");
             return;
         }
@@ -532,6 +597,58 @@ public class PlayingScreen extends BaseScreen {
         if (sonarHighlights.isEmpty()) return;
         sonarHighlights.clear();
         syncFromState();
+    }
+
+    private void refreshFleetPanel(PlayerState me) {
+        fleetPanel.getChildren().clear();
+        fleetPanel.getChildren().add(fleetTitle);
+        if (me == null) return;
+        Board own = me.getOwnBoard();
+        for (ShipType type : ShipType.values()) {
+            Ship ship = own.getShips().stream()
+                    .filter(s -> s.getType() == type)
+                    .findFirst()
+                    .orElse(null);
+            boolean sunk = ship == null || ship.isSunk();
+            javafx.scene.shape.Rectangle bar = new javafx.scene.shape.Rectangle(CELL_SIZE * type.getLength() * 0.7, CELL_SIZE * 0.5);
+            bar.setArcWidth(6);
+            bar.setArcHeight(6);
+            bar.setFill(sunk ? Color.DARKSLATEGRAY : Color.LIGHTGRAY);
+            Label label = new Label(type.name());
+            label.setTextFill(Color.web("#f0f0f0"));
+            javafx.scene.layout.HBox row = new javafx.scene.layout.HBox(8, bar, label);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.setOpacity(sunk ? 0.4 : 1.0);
+            fleetPanel.getChildren().add(row);
+        }
+    }
+
+
+    private void showHandOffOverlay(PlayerState current) {
+        waitingForHandOff = true;
+        enemyGrid.setDisable(true);
+        myGrid.setDisable(true);
+        hotbar.setDisable(true);
+        handoffLabel.setText(current.getName() + "'s turn. Please pass the device.");
+        handoffOverlay.setVisible(true);
+        handoffOverlay.setMouseTransparent(false);
+    }
+
+    private void hideHandOffOverlay() {
+        boolean wasWaiting = waitingForHandOff;
+        waitingForHandOff = false;
+        handoffOverlay.setVisible(false);
+        handoffOverlay.setMouseTransparent(true);
+        enemyGrid.setDisable(false);
+        myGrid.setDisable(false);
+        hotbar.setDisable(false);
+        if (wasWaiting) {
+            lastTurnOwner = session != null ? session.getState().getCurrentPlayer() : null;
+            refreshAbilityButtons();
+            syncFromState();
+        } else {
+            refreshAbilityButtons();
+        }
     }
 
     private Rectangle findCell(GridPane grid, int row, int col) {
