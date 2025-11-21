@@ -7,14 +7,14 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.layout.*;
+import javafx.scene.control.Slider;
 import javafx.scene.input.KeyCode;
+import javafx.scene.layout.*;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
-import javafx.stage.Stage;
 
 public class PlayingScreen extends BaseScreen {
 
@@ -30,7 +30,9 @@ public class PlayingScreen extends BaseScreen {
     private final VBox bottomBox;
     private final Label messageLabel;
     private final HBox hotbar;
-    private final SettingsScreen settings = new SettingsScreen();
+    private final Pane settingsOverlay;
+    private final Slider volumeSlider;
+    private final Slider speedSlider;
     private final java.util.List<Coordinate> sonarHighlights = new java.util.ArrayList<>();
 
     private Button sonarBtn;
@@ -48,7 +50,7 @@ public class PlayingScreen extends BaseScreen {
         root.setPadding(new Insets(20));
         root.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ESCAPE) {
-                settingsPopup();
+                toggleSettingsOverlay();
             }
         });
 
@@ -102,7 +104,41 @@ public class PlayingScreen extends BaseScreen {
 
         VBox centerStack = new VBox(10, messageLabel, boardsBox);
         centerStack.setAlignment(Pos.CENTER);
-        root.setCenter(centerStack);
+
+        // settings overlay
+        volumeSlider = new Slider(0, 1, 0.5);
+        volumeSlider.setShowTickMarks(true);
+        volumeSlider.setShowTickLabels(true);
+        volumeSlider.setMajorTickUnit(0.5);
+
+        speedSlider = new Slider(0.5, 2.0, 1.0);
+        speedSlider.setShowTickMarks(true);
+        speedSlider.setShowTickLabels(true);
+        speedSlider.setMajorTickUnit(0.5);
+        speedSlider.valueProperty().addListener((obs, ov, nv) -> TURN_DELAY = Duration.millis(BASE_DELAY_MS / nv.doubleValue()));
+
+        Button closeSettings = new Button("Close");
+        closeSettings.setOnAction(e -> toggleSettingsOverlay());
+
+        VBox settingsBox = new VBox(10,
+                new Label("Settings"),
+                new Label("Volume"), volumeSlider,
+                new Label("Game Speed"), speedSlider,
+                closeSettings);
+        settingsBox.setAlignment(Pos.CENTER);
+        settingsBox.setPadding(new Insets(20));
+        settingsBox.setMaxWidth(280);
+        settingsBox.setStyle("-fx-background-color: rgba(0,0,0,0.8); -fx-text-fill: #f0f0f0; -fx-border-color: #00ffcc; -fx-border-width: 1;");
+
+        StackPane overlayPane = new StackPane(settingsBox);
+        overlayPane.setStyle("-fx-background-color: rgba(0,0,0,0.4);");
+        overlayPane.setVisible(false);
+        overlayPane.setMouseTransparent(true);
+        StackPane.setAlignment(settingsBox, Pos.CENTER);
+        settingsOverlay = overlayPane;
+
+        StackPane mainLayer = new StackPane(centerStack, settingsOverlay);
+        root.setCenter(mainLayer);
         root.setBottom(bottomBox);
     }
 
@@ -120,6 +156,7 @@ public class PlayingScreen extends BaseScreen {
         setupAbilityButtons();
         syncFromState();
         triggerRemoteIfNeeded();
+        root.requestFocus();
     }
 
     private GridPane createBoardGrid(boolean enemy) {
@@ -455,12 +492,10 @@ public class PlayingScreen extends BaseScreen {
         return message;
     }
 
-    private void settingsPopup() {
-        var stage = (Stage) root.getScene().getWindow();
-        settings.show(stage, () -> {
-            double factor = settings.getSpeedFactor();
-            TURN_DELAY = Duration.millis(BASE_DELAY_MS / factor);
-        });
+    private void toggleSettingsOverlay() {
+        boolean nowVisible = !settingsOverlay.isVisible();
+        settingsOverlay.setVisible(nowVisible);
+        settingsOverlay.setMouseTransparent(!nowVisible);
     }
 
     @Override
