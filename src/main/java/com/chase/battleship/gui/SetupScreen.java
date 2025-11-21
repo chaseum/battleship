@@ -13,18 +13,26 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.effect.ColorAdjust;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.RowConstraints;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
 public class SetupScreen extends BaseScreen {
 
     private static final int CELL_SIZE = 28;
+    private static final Color WATER_COLOR = Color.web("#6f8f89"); // softened teal base
+    private static final Color SHIP_TINT = Color.web("#8faea5");  // lighter teal for ships
+    private static final Color MISS_COLOR = Color.web("#555555"); // medium grey
+    private static final Color HIT_COLOR = Color.web("#9c5a3c");  // rust
 
     private final BorderPane root;
     private final GridPane boardGrid;
+    private final Pane shipOverlay;
+    private final StackPane boardStack;
     private final GridPane gridWithLabels;
     private final Label titleLabel;
     private final Label subtitleLabel;
@@ -60,7 +68,14 @@ public class SetupScreen extends BaseScreen {
         root.setTop(titleBox);
 
         boardGrid = createEmptyGrid(10, 10);
-        gridWithLabels = wrapWithLabels(boardGrid);
+        shipOverlay = new Pane();
+        shipOverlay.setMouseTransparent(true);
+        shipOverlay.setPickOnBounds(false);
+        double boardPixels = CELL_SIZE * 10 + boardGrid.getHgap() * 9;
+        shipOverlay.setPrefSize(boardPixels, boardPixels);
+        boardStack = new StackPane(boardGrid, shipOverlay);
+        boardStack.setPickOnBounds(false);
+        gridWithLabels = wrapWithLabels(boardStack);
 
         shipPalette = new VBox(16);
         shipPalette.setAlignment(Pos.CENTER);
@@ -128,11 +143,11 @@ public class SetupScreen extends BaseScreen {
         if (localTwoP) {
             session.getLocalPlayer().getOwnBoard().reset();
             session.getRemotePlayer().getOwnBoard().reset();
-            subtitleLabel.setText("Player 1: place your ships.");
+            updateSubtitle("Player 1: place your ships.");
         } else if (session.isOnline() && session.isHost()) {
-            subtitleLabel.setText("Lobby code: " + session.getLobbyCode());
+            updateSubtitle("Lobby code: " + session.getLobbyCode());
         } else {
-            subtitleLabel.setText("");
+            updateSubtitle("");
         }
         readyBtn.setDisable(false);
         autoBtn.setDisable(false);
@@ -160,7 +175,7 @@ public class SetupScreen extends BaseScreen {
         Board board = getCurrentPlacementBoard();
         if (board == null) return;
         if (board.getShips().size() < ShipType.values().length) {
-            subtitleLabel.setText("Place all ships before readying up.");
+            updateSubtitle("Place all ships before readying up.");
             return;
         }
 
@@ -170,7 +185,7 @@ public class SetupScreen extends BaseScreen {
             placingSecondPlayer = true;
             selectedShip = null;
             placeHorizontal = true;
-            subtitleLabel.setText("Player 2: place your ships.");
+            updateSubtitle("Player 2: place your ships.");
             session.getRemotePlayer().getOwnBoard().reset();
             refreshBoardView();
             rebuildShipPalette();
@@ -187,17 +202,22 @@ public class SetupScreen extends BaseScreen {
             return;
         }
 
-        subtitleLabel.setText("Sending layout... waiting for opponent");
+        updateSubtitle("Sending layout... waiting for opponent...");
         readyBtn.setDisable(true);
         autoBtn.setDisable(true);
+        manager.showLoading("Syncing fleets...");
 
         Thread t = new Thread(() -> {
             try {
                 session.syncPlacementsOnReady();
-                Platform.runLater(() -> manager.show(ScreenId.PLAYING));
+                Platform.runLater(() -> {
+                    manager.hideLoading();
+                    manager.show(ScreenId.PLAYING);
+                });
             } catch (Exception ex) {
                 Platform.runLater(() -> {
-                    subtitleLabel.setText("Sync failed: " + ex.getMessage());
+                    manager.hideLoading();
+                    updateSubtitle("Sync failed: " + ex.getMessage());
                     readyBtn.setDisable(false);
                     autoBtn.setDisable(false);
                     manager.show(ScreenId.DISCONNECTED);
@@ -216,8 +236,8 @@ public class SetupScreen extends BaseScreen {
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 Rectangle cell = new Rectangle(CELL_SIZE, CELL_SIZE);
-                cell.setFill(Color.DARKCYAN);
-                cell.setStroke(Color.web("#002b36"));
+                cell.setFill(colorForOwnCell(CellState.EMPTY));
+                cell.setStroke(Color.web("#333333"));
                 int fr = r;
                 int fc = c;
                 cell.setOnMouseClicked(e -> handleCellClick(fr, fc));
@@ -250,6 +270,7 @@ public class SetupScreen extends BaseScreen {
                 rect.setFill(colorForOwnCell(cs));
             }
         }
+        renderShipOverlay(board);
     }
 
     private void handleCellClick(int row, int col) {
@@ -257,13 +278,13 @@ public class SetupScreen extends BaseScreen {
         Board board = getCurrentPlacementBoard();
         Coordinate start = new Coordinate(row, col);
         if (!board.canPlaceShip(selectedShip, start, placeHorizontal)) {
-            subtitleLabel.setText("Cannot place " + selectedShip + " here.");
+            updateSubtitle("Cannot place " + selectedShip + " here.");
             return;
         }
         Ship ship = new Ship(selectedShip);
         board.placeShip(ship, start, placeHorizontal);
         selectedShip = null;
-        subtitleLabel.setText("Placed ship. Remaining ships shown on left.");
+        updateSubtitle("Placed ship. Remaining ships shown on left.");
         rebuildShipPalette();
         refreshBoardView();
         clearPreview();
@@ -271,11 +292,66 @@ public class SetupScreen extends BaseScreen {
 
     private Color colorForOwnCell(CellState cs) {
         return switch (cs) {
-            case HIT -> Color.CRIMSON;
-            case MISS -> Color.DARKSLATEGRAY;
-            case SHIP -> Color.LIGHTGRAY;
-            default -> Color.DARKCYAN;
+            case HIT -> HIT_COLOR;
+            case MISS -> MISS_COLOR;
+            case SHIP -> SHIP_TINT;
+            default -> WATER_COLOR;
         };
+    }
+
+    private void renderShipOverlay(Board board) {
+        shipOverlay.getChildren().clear();
+        if (board == null) return;
+        double stepX = CELL_SIZE + boardGrid.getHgap();
+        double stepY = CELL_SIZE + boardGrid.getVgap();
+        double insetX = boardGrid.getHgap() / 2.0;
+        double insetY = boardGrid.getVgap() / 2.0;
+
+        for (Ship ship : board.getShips()) {
+            java.util.List<Coordinate> coords = ship.getCoordinates();
+            if (coords.isEmpty()) continue;
+
+            boolean horizontal = coords.size() < 2 || coords.get(0).row() == coords.get(1).row();
+            int minRow = coords.stream().mapToInt(Coordinate::row).min().orElse(0);
+            int minCol = coords.stream().mapToInt(Coordinate::col).min().orElse(0);
+            double x = minCol * stepX;
+            double y = minRow * stepY;
+
+            Image art = horizontal
+                    ? AssetLibrary.shipTopDown(ship.getType())
+                    : AssetLibrary.shipTopDownVertical(ship.getType());
+            ImageView view = new ImageView(art);
+            view.setSmooth(false);
+            view.setPreserveRatio(true);
+
+            int len = ship.getType().getLength();
+            if (horizontal) {
+                view.setFitHeight(CELL_SIZE);
+                view.setFitWidth(len * CELL_SIZE + boardGrid.getHgap() * (len - 1));
+            } else {
+                view.setFitWidth(CELL_SIZE);
+                view.setFitHeight(len * CELL_SIZE + boardGrid.getVgap() * (len - 1));
+            }
+
+            long hits = coords.stream()
+                    .filter(c -> board.getCellState(c) == CellState.HIT)
+                    .count();
+            double opacity = ship.isSunk() ? 0.35 : (hits > 0 ? 0.78 : 0.92);
+            view.setOpacity(opacity);
+            view.setMouseTransparent(true);
+
+            DropShadow shadow = new DropShadow(10, Color.web("#061826"));
+            if (ship.getType() == ShipType.SUBMARINE) {
+                ColorAdjust hue = new ColorAdjust();
+                hue.setHue(0.12);
+                shadow.setInput(hue);
+            }
+            view.setEffect(shadow);
+
+            view.setLayoutX(x + insetX);
+            view.setLayoutY(y + insetY);
+            shipOverlay.getChildren().add(view);
+        }
     }
 
     @Override
@@ -285,7 +361,7 @@ public class SetupScreen extends BaseScreen {
 
     private void toggleOrientation() {
         placeHorizontal = !placeHorizontal;
-        subtitleLabel.setText("Orientation: " + (placeHorizontal ? "Horizontal" : "Vertical"));
+        updateSubtitle("Orientation: " + (placeHorizontal ? "Horizontal" : "Vertical"));
     }
 
     private void resetManual() {
@@ -295,7 +371,7 @@ public class SetupScreen extends BaseScreen {
         placeHorizontal = true;
         readyBtn.setDisable(false);
         autoBtn.setDisable(false);
-        subtitleLabel.setText("Ships reset. Choose a ship to place.");
+        updateSubtitle("Ships reset. Choose a ship to place.");
         rebuildShipPalette();
         refreshBoardView();
         clearPreview();
@@ -318,15 +394,23 @@ public class SetupScreen extends BaseScreen {
         for (ShipType type : ShipType.values()) {
             if (placed.contains(type)) continue;
 
-            Rectangle r = new Rectangle(CELL_SIZE * type.getLength(), CELL_SIZE * 0.7, Color.LIGHTGRAY);
-            r.setArcWidth(6);
-            r.setArcHeight(6);
+            ImageView icon = new ImageView(AssetLibrary.shipIcon(type));
+            icon.setPreserveRatio(true);
+            icon.setSmooth(false);
+            icon.setFitHeight(28);
+
+            StackPane artCard = new StackPane(icon);
+            artCard.setPadding(new Insets(8));
+            artCard.setStyle("-fx-background-color: rgba(255,255,255,0.04); -fx-border-color: rgba(53, 240, 255, 0.6); -fx-border-radius: 6; -fx-background-radius: 6;");
+
             Label l = new Label(type.name());
-            VBox box = new VBox(4, r, l);
+            l.setTextFill(Color.web("#e6f4ff"));
+            VBox box = new VBox(6, artCard, l);
             box.setAlignment(Pos.CENTER);
             box.setOnMouseClicked(e -> {
                 selectedShip = type;
-                subtitleLabel.setText("Selected " + type + " (" + (placeHorizontal ? "Horizontal" : "Vertical") + ")");
+                updateSubtitle("Selected " + type + " (" + (placeHorizontal ? "Horizontal" : "Vertical") + ")");
+                highlightSelection(box);
             });
             shipPalette.getChildren().add(box);
         }
@@ -334,9 +418,10 @@ public class SetupScreen extends BaseScreen {
         if (shipPalette.getChildren().size() == 1) {
             shipPalette.getChildren().add(new Label("All ships placed"));
         }
+        highlightSelection(null);
     }
 
-    private GridPane wrapWithLabels(GridPane grid) {
+    private GridPane wrapWithLabels(Node boardNode) {
         GridPane outer = new GridPane();
         outer.setHgap(2);
         outer.setVgap(2);
@@ -379,7 +464,7 @@ public class SetupScreen extends BaseScreen {
             outer.add(lbl, 0, r + 1);
         }
 
-        outer.add(grid, 1, 1, 10, 10);
+        outer.add(boardNode, 1, 1, 10, 10);
         return outer;
     }
 
@@ -430,5 +515,22 @@ public class SetupScreen extends BaseScreen {
     private boolean isLocalTwoPlayer() {
         GameMode mode = session != null ? session.getConfig().getGameMode() : null;
         return mode != null && mode.isLocalTwoPlayer();
+    }
+
+    private void highlightSelection(VBox selectedBox) {
+        for (Node n : shipPalette.getChildren()) {
+            if (n instanceof VBox box) {
+                if (selectedBox == null) {
+                    box.setOpacity(1.0);
+                } else {
+                    box.setOpacity(box == selectedBox ? 1.0 : 0.6);
+                }
+            }
+        }
+    }
+
+    private void updateSubtitle(String text) {
+        subtitleLabel.setText(text);
+        FxAnimations.marqueeIfNeeded(subtitleLabel, 360);
     }
 }

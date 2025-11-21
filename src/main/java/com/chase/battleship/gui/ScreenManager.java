@@ -1,8 +1,11 @@
 package com.chase.battleship.gui;
 
+import javafx.animation.FadeTransition;
 import javafx.scene.Scene;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -13,6 +16,9 @@ public class ScreenManager {
     private final Stage stage;
     private final Map<ScreenId, BaseScreen> screens = new EnumMap<>(ScreenId.class);
     private final Stack<ScreenId> navStack = new Stack<>();
+    private StackPane stageRoot;
+    private StackPane contentHost;
+    private LoadingOverlay loadingOverlay;
 
     // GUI-level game state
     private GuiGameSession.Mode plannedMode = GuiGameSession.Mode.CLASSIC_VS_AI;
@@ -57,6 +63,7 @@ public class ScreenManager {
 
     // -------- screen navigation --------
     public void show(ScreenId id) {
+        boolean sceneReady = stageRoot != null;
         if (!screens.containsKey(id)) {
             screens.put(id, createScreen(id));
         }
@@ -68,18 +75,33 @@ public class ScreenManager {
 
         BaseScreen screen = screens.get(id);
         Region root = screen.getRoot();
+        ensureScene(root);
+        if (loadingOverlay != null && sceneReady) {
+            loadingOverlay.transition("Loading...");
+        }
 
-        Scene scene = stage.getScene();
-        if (scene == null) {
-            scene = new Scene(root, 1280, 720);
-            scene.setCursor(javafx.scene.Cursor.CROSSHAIR);
-            var css = ScreenManager.class.getResource("/gui.css");
-            if (css != null) {
-                scene.getStylesheets().add(css.toExternalForm());
-            }
-            stage.setScene(scene);
+        if (!contentHost.getChildren().isEmpty()) {
+            Region previous = (Region) contentHost.getChildren().get(0);
+            FadeTransition fadeOut = new FadeTransition(Duration.millis(180), previous);
+            fadeOut.setToValue(0);
+            fadeOut.setOnFinished(e -> {
+                contentHost.getChildren().setAll(root);
+                root.setOpacity(0);
+                root.requestFocus();
+                FadeTransition fadeIn = new FadeTransition(Duration.millis(220), root);
+                fadeIn.setFromValue(0);
+                fadeIn.setToValue(1);
+                fadeIn.play();
+            });
+            fadeOut.play();
         } else {
-            scene.setRoot(root);
+            contentHost.getChildren().setAll(root);
+            root.setOpacity(0);
+            root.requestFocus();
+            FadeTransition fadeIn = new FadeTransition(Duration.millis(220), root);
+            fadeIn.setFromValue(0);
+            fadeIn.setToValue(1);
+            fadeIn.play();
         }
 
         if (!navStack.isEmpty() && navStack.peek() != id) {
@@ -87,7 +109,6 @@ public class ScreenManager {
         } else if (navStack.isEmpty()) {
             navStack.push(id);
         }
-
         screen.onShow();
     }
 
@@ -99,6 +120,44 @@ public class ScreenManager {
         navStack.pop();
         ScreenId prev = navStack.peek();
         show(prev);
+    }
+
+    public void showLoading(String message) {
+        if (loadingOverlay != null) {
+            loadingOverlay.show(message);
+        }
+    }
+
+    public void hideLoading() {
+        if (loadingOverlay != null) {
+            loadingOverlay.hide();
+        }
+    }
+
+    LoadingOverlay getLoadingOverlay() {
+        return loadingOverlay;
+    }
+
+    private void ensureScene(Region fallback) {
+        if (stageRoot != null) {
+            return;
+        }
+        contentHost = new StackPane(fallback);
+        loadingOverlay = new LoadingOverlay();
+        stageRoot = new StackPane(contentHost, loadingOverlay);
+
+        Scene scene = stage.getScene();
+        if (scene == null) {
+            scene = new Scene(stageRoot, 1280, 720);
+            scene.setCursor(javafx.scene.Cursor.CROSSHAIR);
+            var css = ScreenManager.class.getResource("/gui.css");
+            if (css != null) {
+                scene.getStylesheets().add(css.toExternalForm());
+            }
+            stage.setScene(scene);
+        } else {
+            scene.setRoot(stageRoot);
+        }
     }
 
     private BaseScreen createScreen(ScreenId id) {

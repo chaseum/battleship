@@ -39,6 +39,15 @@
 
     <!-- ==========  Add JavaFX Maven Plugin  ========== -->
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>assets</directory>
+                <targetPath>assets</targetPath>
+            </resource>
+        </resources>
         <plugins>
             <!-- other plugins ... -->
 

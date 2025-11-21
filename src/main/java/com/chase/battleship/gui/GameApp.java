@@ -5,6 +5,7 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCombination;
 import javafx.stage.Stage;
+import javafx.scene.text.Font;
 
 public class GameApp extends Application {
 
@@ -16,6 +17,12 @@ public class GameApp extends Application {
 
 		primaryStage.setTitle("Neo-Retro Battleship");
 		// primaryStage.getIcons().add(new Image("/assets/icon.png"));
+
+		// preload pixel font for consistent styling
+		var fontStream = getClass().getResourceAsStream("/assets/images/Pixellari.ttf");
+		if (fontStream != null) {
+			Font.loadFont(fontStream, 18);
+		}
 
 		screenManager.show(ScreenId.TITLE);
 

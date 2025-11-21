@@ -41,6 +41,7 @@ public class GuiGameSession {
     private final String joinCode;
     private Boolean localWon;
     private TurnAction lastRemoteAction;
+    private TurnAction lastAction;
 
     public GuiGameSession(Mode uiMode) {
         this(uiMode, null);
@@ -259,6 +260,10 @@ public class GuiGameSession {
         return lastRemoteAction;
     }
 
+    public TurnAction getLastAction() {
+        return lastAction;
+    }
+
     public boolean isCurrentPlayerHuman() {
         PlayerState current = state.getCurrentPlayer();
         if (online) {
@@ -276,6 +281,7 @@ public class GuiGameSession {
         if (online) {
             if (isHost) {
                 TurnResult res = engine.processTurn(action);
+                lastAction = action;
                 net.broadcastResult(action, res, state);
                 if (state.isGameOver()) {
                     updateLocalWinFlagFromState();
@@ -283,6 +289,7 @@ public class GuiGameSession {
                 return res;
             } else {
                 net.sendLocalMove(action);
+                lastAction = action;
                 OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
                 if (update.winner() != null) {
                     state.setWinner(update.winner());
@@ -295,6 +302,7 @@ public class GuiGameSession {
         if (state.isGameOver()) {
             updateLocalWinFlagFromState();
         }
+        lastAction = action;
         return res;
     }
 
@@ -310,6 +318,7 @@ public class GuiGameSession {
                 if (current == remotePlayer) {
                     TurnAction action = net.waitForRemoteMove();
                     lastRemoteAction = action;
+                    lastAction = action;
                     TurnResult res = engine.processTurn(action);
                     net.broadcastResult(action, res, state);
                     if (state.isGameOver()) {
@@ -321,6 +330,9 @@ public class GuiGameSession {
             } else {
                 OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
                 lastRemoteAction = update.action();
+                if (update.action() != null) {
+                    lastAction = update.action();
+                }
                 if (update.winner() != null) {
                     state.setWinner(update.winner());
                     updateLocalWinFlagFromState();
@@ -334,6 +346,7 @@ public class GuiGameSession {
         }
 
         TurnAction aiAction = agent.chooseAction(state, isP1);
+        lastAction = aiAction;
         return engine.processTurn(aiAction);
     }
 }
