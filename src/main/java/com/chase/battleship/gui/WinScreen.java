@@ -17,8 +17,21 @@ public class WinScreen extends BaseScreen {
         Button playAgain = new Button("Play Again");
         Button title = new Button("Back to Title");
 
-        playAgain.setOnAction(e -> screenManager.show(ScreenId.SINGLE_PLAYER_SELECT));
-        title.setOnAction(e -> screenManager.show(ScreenId.TITLE));
+        Runnable clear = () -> {
+            if (screenManager.getCurrentSession() != null) {
+                screenManager.getCurrentSession().close();
+            }
+            screenManager.clearCurrentSession();
+        };
+
+        playAgain.setOnAction(e -> {
+            clear.run();
+            screenManager.show(ScreenId.SINGLE_PLAYER_SELECT);
+        });
+        title.setOnAction(e -> {
+            clear.run();
+            screenManager.show(ScreenId.TITLE);
+        });
 
         root.getChildren().addAll(label, playAgain, title);
         root.setAlignment(Pos.CENTER);

@@ -6,6 +6,7 @@ public class GameState {
 	private final PlayerState player2;
 	private boolean player1Turn;
 	private boolean gameOver;
+	private PlayerState winner;
 
 	public GameState(GameConfig config, PlayerState p1, PlayerState p2) {
 		this.config = config;
@@ -44,6 +45,14 @@ public class GameState {
 
 	public void endGame() {
 		this.gameOver = true;
+	}
+
+	public PlayerState getWinner() {
+		return winner;
+	}
+
+	public void setWinner(PlayerState winner) {
+		this.winner = winner;
 	}
 
 	public void nextTurn() {

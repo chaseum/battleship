@@ -118,9 +118,7 @@ public class OnlinePeerConnection {
     private void sendInitialSetup() {
         out.println("HELLO HOST");
         out.println("CONFIG " + config.getRows() + " " + config.getCols());
-        sendPlacements("P1", hostPlayer.getOwnBoard());
-        sendPlacements("P2", clientPlayer.getOwnBoard());
-        out.println("READY");
+        out.println("MODE " + config.getGameMode());
     }
 
     private void receiveInitialSetup() throws IOException {
@@ -133,18 +131,11 @@ public class OnlinePeerConnection {
                 // rows/cols already match via config
                 continue;
             }
-            if (line.startsWith("PLACE")) {
-                String[] parts = line.split("\\s+");
-                boolean forP1 = parts[1].equals("P1");
-                ShipType type = ShipType.valueOf(parts[2]);
-                int r = Integer.parseInt(parts[3]);
-                int c = Integer.parseInt(parts[4]);
-                boolean horizontal = parts[5].equals("H");
-                Board targetBoard = forP1 ? hostPlayer.getOwnBoard() : clientPlayer.getOwnBoard();
-                Ship ship = new Ship(type);
-                targetBoard.placeShip(ship, new Coordinate(r, c), horizontal);
-            }
-            if ("READY".equals(line)) {
+            if (line.startsWith("MODE")) {
+                String mode = line.substring(5).trim();
+                if (!mode.equals(config.getGameMode().name())) {
+                    throw new IOException("Mode mismatch: host is " + mode + ", client is " + config.getGameMode());
+                }
                 break;
             }
         }
@@ -156,6 +147,58 @@ public class OnlinePeerConnection {
             out.println("PLACE " + prefix + " " + placement.type() + " "
                     + placement.start().row() + " " + placement.start().col() + " "
                     + (placement.horizontal() ? "H" : "V"));
+        }
+    }
+
+    /**
+     * Called after both players click Ready. Sends this player's placements and waits for the peer's
+     * placements so both sides share identical board state.
+     */
+    public void exchangePlacementsOnReady(Board localBoard, boolean senderIsHost) {
+        awaitReady();
+        sendReady(localBoard, senderIsHost);
+        waitForReadyPayload();
+    }
+
+    private void sendReady(Board localBoard, boolean senderIsHost) {
+        String prefix = senderIsHost ? "P1" : "P2";
+        out.println("READY " + prefix);
+        sendPlacements(prefix, localBoard);
+        out.println("READY_END");
+    }
+
+    private void waitForReadyPayload() {
+        try {
+            String line;
+            while ((line = in.readLine()) != null) {
+                if (!line.startsWith("READY")) {
+                    continue;
+                }
+                String[] parts = line.split("\\s+");
+                if (parts.length < 2) {
+                    throw new IllegalStateException("READY missing target player");
+                }
+                String target = parts[1];
+                Board targetBoard = target.equals("P1") ? hostPlayer.getOwnBoard() : clientPlayer.getOwnBoard();
+                targetBoard.reset();
+                while ((line = in.readLine()) != null) {
+                    if ("READY_END".equals(line)) {
+                        return;
+                    }
+                    if (line.startsWith("PLACE")) {
+                        String[] p = line.split("\\s+");
+                        ShipType type = ShipType.valueOf(p[2]);
+                        int r = Integer.parseInt(p[3]);
+                        int c = Integer.parseInt(p[4]);
+                        boolean horizontal = p[5].equals("H");
+                        Ship ship = new Ship(type);
+                        targetBoard.placeShip(ship, new Coordinate(r, c), horizontal);
+                    }
+                }
+            }
+            throw new IllegalStateException("Peer disconnected before sending READY");
+        } catch (IOException e) {
+            throw new IllegalStateException("Lost connection to peer", e);
         }
     }
 
@@ -183,6 +226,7 @@ public class OnlinePeerConnection {
             TurnAction action = null;
             String message = "";
             boolean gameOver = false;
+            String winnerTag = null;
             while (true) {
                 String line = in.readLine();
                 if (line == null) throw new IOException("Disconnected");
@@ -192,6 +236,7 @@ public class OnlinePeerConnection {
                     message = line.substring(4);
                 } else if (line.startsWith("OVER ")) {
                     gameOver = !line.endsWith("NONE");
+                    winnerTag = line.substring(5).trim();
                 } else if (line.equals("STATE_END")) {
                     break;
                 }
@@ -202,8 +247,15 @@ public class OnlinePeerConnection {
             TurnResult res = engine.processTurn(action);
             if (gameOver) {
                 engine.getGameState().endGame();
+                if (winnerTag != null && !"NONE".equals(winnerTag)) {
+                    PlayerState winner = winnerTag.equals("P1") ? hostPlayer : clientPlayer;
+                    engine.getGameState().setWinner(winner);
+                }
             }
-            return new RemoteUpdate(res, message);
+            PlayerState winner = gameOver && engine.getGameState().getWinner() != null
+                    ? engine.getGameState().getWinner()
+                    : null;
+            return new RemoteUpdate(res, message, winner, action);
         } catch (IOException e) {
             throw new IllegalStateException("Lost connection to peer", e);
         }
@@ -214,13 +266,15 @@ public class OnlinePeerConnection {
         out.println("APPLY " + Protocol.formatAction(action));
         out.println("MSG " + result.message());
         if (state.isGameOver()) {
-            out.println("OVER " + state.getCurrentPlayer().getName());
+            PlayerState w = state.getWinner();
+            String winnerTag = w == null ? "NONE" : (w == hostPlayer ? "P1" : "P2");
+            out.println("OVER " + winnerTag);
         } else {
             out.println("OVER NONE");
         }
         out.println("STATE_END");
     }
 
-    public record RemoteUpdate(TurnResult localResult, String remoteMessage) {}
+    public record RemoteUpdate(TurnResult localResult, String remoteMessage, PlayerState winner, TurnAction action) {}
 }
 

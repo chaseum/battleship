@@ -211,13 +211,6 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 				}
 			}
 		}
-		if(hits.isEmpty()) {
-			return new AbilityResult(String.format(
-				"Sonar scan at (%d,$d) found no ship segments in the 3x3 area.",
-				center.row(), center.col()
-			));
-		}
-
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format(
 			"Sonar scan at (%d,%d) detected %d ship segment(s) in the 3x3 area: ",
@@ -229,6 +222,12 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 			if(i < hits.size() - 1) sb.append(", ");
 		}
 		sb.append(".");
+		if (hits.isEmpty()) {
+			sb = new StringBuilder(String.format(
+					"Sonar scan at (%d,%d) found no ship segments in the 3x3 area.",
+					center.row(), center.col()
+			));
+		}
 
 		return new AbilityResult(sb.toString());
 	}

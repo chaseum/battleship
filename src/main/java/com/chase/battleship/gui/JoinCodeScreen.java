@@ -20,6 +20,10 @@ public class JoinCodeScreen extends BaseScreen {
 
     private final VBox root;
     private final Label errorLabel;
+    private final Button joinBtn;
+    private final TextField codeField;
+    private final RadioButton classicBtn;
+    private final RadioButton neoBtn;
 
     public JoinCodeScreen(ScreenManager manager) {
         super(manager);
@@ -40,23 +44,23 @@ public class JoinCodeScreen extends BaseScreen {
 
         ToggleGroup modeGroup = new ToggleGroup();
 
-        RadioButton classicBtn = new RadioButton("Classic");
+        classicBtn = new RadioButton("Classic");
         classicBtn.setStyle("-fx-text-fill: #f0f0f0;");
         classicBtn.setToggleGroup(modeGroup);
         classicBtn.setSelected(true);
 
-        RadioButton neoBtn = new RadioButton("Neo-Retro");
+        neoBtn = new RadioButton("Neo-Retro");
         neoBtn.setStyle("-fx-text-fill: #f0f0f0;");
         neoBtn.setToggleGroup(modeGroup);
 
         HBox modeRow = new HBox(12, modeLabel, classicBtn, neoBtn);
         modeRow.setAlignment(Pos.CENTER);
 
-        TextField codeField = new TextField();
+        codeField = new TextField();
         codeField.setPromptText("Enter join code");
         codeField.setMaxWidth(250); // <-- much smaller than full width
 
-        Button joinBtn = new Button("Join Game");
+        joinBtn = new Button("Join Game");
         Button backBtn = new Button("Back");
 
         errorLabel = new Label("");
@@ -94,7 +98,13 @@ public class JoinCodeScreen extends BaseScreen {
             joinThread.start();
         });
 
-        backBtn.setOnAction(e -> manager.goBack());
+        backBtn.setOnAction(e -> {
+            if (manager.getCurrentSession() != null) {
+                manager.getCurrentSession().close();
+            }
+            manager.clearCurrentSession();
+            manager.goBack();
+        });
 
         root.getChildren().addAll(title, info, modeRow, codeField, joinBtn, backBtn, errorLabel);
     }
@@ -102,5 +112,16 @@ public class JoinCodeScreen extends BaseScreen {
     @Override
     public Region getRoot() {
         return root;
+    }
+
+    @Override
+    public void onShow() {
+        joinBtn.setDisable(false);
+        errorLabel.setText("");
+        codeField.clear();
+        if (manager.getCurrentSession() != null) {
+            manager.getCurrentSession().close();
+        }
+        manager.clearCurrentSession();
     }
 }

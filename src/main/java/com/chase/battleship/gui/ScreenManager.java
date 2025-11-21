@@ -49,6 +49,9 @@ public class ScreenManager {
     }
 
     public void clearCurrentSession() {
+        if (this.currentSession != null) {
+            this.currentSession.close();
+        }
         this.currentSession = null;
     }
 
@@ -56,6 +59,11 @@ public class ScreenManager {
     public void show(ScreenId id) {
         if (!screens.containsKey(id)) {
             screens.put(id, createScreen(id));
+        }
+
+        if (id == ScreenId.TITLE && currentSession != null) {
+            currentSession.close();
+            clearCurrentSession();
         }
 
         BaseScreen screen = screens.get(id);
@@ -101,6 +109,7 @@ public class ScreenManager {
             case PLAYING -> new PlayingScreen(this);
             case WIN -> new WinScreen(this);
             case LOSE -> new LoseScreen(this);
+            case DISCONNECTED -> new DisconnectedScreen(this);
         };
     }
 }

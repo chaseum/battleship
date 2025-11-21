@@ -6,34 +6,27 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
-public class LoseScreen extends BaseScreen {
+public class DisconnectedScreen extends BaseScreen {
 
     private final VBox root = new VBox(15);
 
-    public LoseScreen(ScreenManager screenManager) {
+    public DisconnectedScreen(ScreenManager screenManager) {
         super(screenManager);
 
-        Label label = new Label("You Lost");
-        Button playAgain = new Button("Play Again");
+        Label label = new Label("Player disconnected");
         Button title = new Button("Back to Title");
+        Button quit = new Button("Quit");
 
-        Runnable clear = () -> {
+        title.setOnAction(e -> {
             if (screenManager.getCurrentSession() != null) {
                 screenManager.getCurrentSession().close();
             }
             screenManager.clearCurrentSession();
-        };
-
-        playAgain.setOnAction(e -> {
-            clear.run();
-            screenManager.show(ScreenId.SINGLE_PLAYER_SELECT);
-        });
-        title.setOnAction(e -> {
-            clear.run();
             screenManager.show(ScreenId.TITLE);
         });
+        quit.setOnAction(e -> System.exit(0));
 
-        root.getChildren().addAll(label, playAgain, title);
+        root.getChildren().addAll(label, title, quit);
         root.setAlignment(Pos.CENTER);
     }
 

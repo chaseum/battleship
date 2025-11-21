@@ -18,6 +18,7 @@ public final class BoardUtils {
 	private BoardUtils() {}
 
 	public static void randomFleetPlacement(Board board) {
+		board.reset();
 		for(ShipType type : DEFAULT_FLEET) {
 			placeRandomShip(board, type);
 		}

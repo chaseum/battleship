@@ -39,6 +39,8 @@ public class GuiGameSession {
     private final String lobbyCode;
     private final OnlinePeerConnection net;
     private final String joinCode;
+    private Boolean localWon;
+    private TurnAction lastRemoteAction;
 
     public GuiGameSession(Mode uiMode) {
         this(uiMode, null);
@@ -57,7 +59,8 @@ public class GuiGameSession {
                 Board b2 = new Board(config.getRows(), config.getCols());
 
                 boolean randomize = switch (uiMode) {
-                    case CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
+                    case CLASSIC_ONLINE_HOST, NEORETRO_ONLINE_HOST,
+                            CLASSIC_ONLINE_CLIENT, NEORETRO_ONLINE_CLIENT -> false;
                     default -> true;
                 };
                 if (randomize) {
@@ -200,12 +203,49 @@ public class GuiGameSession {
     }
 
     /**
+     * Randomly places the local fleet (used by GUI auto-setup).
+     */
+    public void randomizeLocalFleet() {
+        BoardUtils.randomFleetPlacement(localPlayer.getOwnBoard());
+    }
+
+    /**
+     * Sends the local placements to the peer and blocks until the peer also sends theirs.
+     */
+    public void syncPlacementsOnReady() {
+        if (!online || net == null) return;
+        if (localPlayer.getOwnBoard().getShips().isEmpty()) {
+            BoardUtils.randomFleetPlacement(localPlayer.getOwnBoard());
+        }
+        net.exchangePlacementsOnReady(
+                localPlayer.getOwnBoard(),
+                isHost
+        );
+    }
+
+    private void updateLocalWinFlagFromState() {
+        if (state.getWinner() == null) {
+            localWon = null;
+        } else {
+            localWon = (state.getWinner() == localPlayer);
+        }
+    }
+
+    /**
      * Releases any network resources for the current session.
      */
     public void close() {
         if (net != null) {
             net.close();
         }
+    }
+
+    public Boolean isLocalWinner() {
+        return localWon;
+    }
+
+    public TurnAction getLastRemoteAction() {
+        return lastRemoteAction;
     }
 
     public boolean isCurrentPlayerHuman() {
@@ -226,14 +266,25 @@ public class GuiGameSession {
             if (isHost) {
                 TurnResult res = engine.processTurn(action);
                 net.broadcastResult(action, res, state);
+                if (state.isGameOver()) {
+                    updateLocalWinFlagFromState();
+                }
                 return res;
             } else {
                 net.sendLocalMove(action);
                 OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
+                if (update.winner() != null) {
+                    state.setWinner(update.winner());
+                    updateLocalWinFlagFromState();
+                }
                 return new TurnResult(update.localResult().success(), update.remoteMessage(), state);
             }
         }
-        return engine.processTurn(action);
+        TurnResult res = engine.processTurn(action);
+        if (state.isGameOver()) {
+            updateLocalWinFlagFromState();
+        }
+        return res;
     }
 
     public TurnResult maybeLetAiAct() {
@@ -247,13 +298,22 @@ public class GuiGameSession {
             if (isHost) {
                 if (current == remotePlayer) {
                     TurnAction action = net.waitForRemoteMove();
+                    lastRemoteAction = action;
                     TurnResult res = engine.processTurn(action);
                     net.broadcastResult(action, res, state);
+                    if (state.isGameOver()) {
+                        updateLocalWinFlagFromState();
+                    }
                     return new TurnResult(res.success(), "Enemy: " + res.message(), state);
                 }
                 return null;
             } else {
                 OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
+                lastRemoteAction = update.action();
+                if (update.winner() != null) {
+                    state.setWinner(update.winner());
+                    updateLocalWinFlagFromState();
+                }
                 return new TurnResult(update.localResult().success(), update.remoteMessage(), state);
             }
         }

@@ -107,6 +107,14 @@ public class Board {
     	grid[c.row()][c.col()] = state;
 	}
 
+	// resets board
+	public void reset() {
+		for (int r = 0; r < rows; r++) {
+			Arrays.fill(grid[r], CellState.EMPTY);
+		}
+		ships.clear();
+	}
+
 	public boolean allShipsSunkByGrid() {
             for (CellState[] grid1 : grid) {
                 for (CellState grid11 : grid1) {

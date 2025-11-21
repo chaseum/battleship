@@ -17,6 +17,8 @@ public class HostLobbyScreen extends BaseScreen {
     private final VBox root;
     private final Label codeLabel;
     private final Label statusLabel;
+    private final Button waitButton;
+    private final Button retryButton;
 
     private GuiGameSession session;
     private volatile boolean waiting;
@@ -32,7 +34,7 @@ public class HostLobbyScreen extends BaseScreen {
         Label title = new Label("Host Lobby");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px;");
 
-        Label info = new Label("Share this code with your friend. Waiting for them to join...");
+        Label info = new Label("Share this code with your friend, then start searching when they're ready to join.");
         info.setStyle("-fx-text-fill: #cccccc;");
         info.setWrapText(true);
         info.setMaxWidth(420);
@@ -42,6 +44,20 @@ public class HostLobbyScreen extends BaseScreen {
 
         statusLabel = new Label("");
         statusLabel.setStyle("-fx-text-fill: #cccccc;");
+
+        waitButton = new Button("Start searching for player");
+        waitButton.setDisable(true);
+        waitButton.setOnAction(e -> {
+            statusLabel.setText("Waiting for a player to join...");
+            waitButton.setText("Waiting...");
+            waitButton.setDisable(true);
+            startWaitingForClient();
+        });
+
+        retryButton = new Button("Retry host setup");
+        retryButton.setManaged(false);
+        retryButton.setVisible(false);
+        retryButton.setOnAction(e -> beginSessionSetup());
 
         Button backBtn = new Button("Cancel");
         backBtn.setOnAction(e -> {
@@ -53,14 +69,26 @@ public class HostLobbyScreen extends BaseScreen {
             manager.goBack();
         });
 
-        root.getChildren().addAll(title, info, codeLabel, statusLabel, backBtn);
+        root.getChildren().addAll(title, info, codeLabel, statusLabel, waitButton, retryButton, backBtn);
     }
 
     @Override
     public void onShow() {
+        beginSessionSetup();
+    }
+
+    private void beginSessionSetup() {
         stopWaiting();
+        if (session != null) {
+            session.close();
+        }
+        manager.clearCurrentSession();
         codeLabel.setText("Generating code...");
         statusLabel.setText("Connecting to rendezvous...");
+        waitButton.setText("Start searching for player");
+        waitButton.setDisable(true);
+        showRetry(false);
+        session = null;
 
         Thread setupThread = new Thread(() -> {
             try {
@@ -75,15 +103,19 @@ public class HostLobbyScreen extends BaseScreen {
 
                 Platform.runLater(() -> {
                     session = preparedSession;
-                    codeLabel.setText("Lobby Code: " + session.getLobbyCode());
-                    statusLabel.setText("Waiting for a player to join...");
-                    startWaitingForClient();
+                    String code = session.getLobbyCode();
+                    codeLabel.setText("Lobby Code: " + (code == null ? "--" : code));
+                    statusLabel.setText("Ready. Click start when your friend is ready to join.");
+                    waitButton.setDisable(false);
                 });
             } catch (Exception ex) {
                 Platform.runLater(() -> {
                     session = null;
                     codeLabel.setText("Lobby Code: --");
-                    statusLabel.setText("Failed to host: " + ex.getMessage());
+                    statusLabel.setText("Failed to host: " + ex.getMessage()
+                            + ". Is the rendezvous server running?");
+                    waitButton.setDisable(true);
+                    showRetry(true);
                 });
             }
         }, "host-setup");
@@ -111,7 +143,14 @@ public class HostLobbyScreen extends BaseScreen {
                     manager.show(ScreenId.SETUP);
                 });
             } catch (Exception ex) {
-                Platform.runLater(() -> statusLabel.setText("Connection failed: " + ex.getMessage()));
+                Platform.runLater(() -> {
+                    if (!waiting) return;
+                    statusLabel.setText("Connection failed: " + ex.getMessage());
+                    waiting = false;
+                    waitButton.setDisable(true);
+                    showRetry(true);
+                    manager.show(ScreenId.DISCONNECTED);
+                });
             }
         }, "host-lobby-wait");
         t.setDaemon(true);
@@ -125,5 +164,10 @@ public class HostLobbyScreen extends BaseScreen {
     @Override
     public Region getRoot() {
         return root;
+    }
+
+    private void showRetry(boolean show) {
+        retryButton.setManaged(show);
+        retryButton.setVisible(show);
     }
 }

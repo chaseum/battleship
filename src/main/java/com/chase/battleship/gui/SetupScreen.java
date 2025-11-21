@@ -3,12 +3,17 @@ package com.chase.battleship.gui;
 import com.chase.battleship.core.Board;
 import com.chase.battleship.core.CellState;
 import com.chase.battleship.core.Coordinate;
+import com.chase.battleship.core.Ship;
+import com.chase.battleship.core.ShipType;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.*;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.RowConstraints;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
@@ -18,10 +23,20 @@ public class SetupScreen extends BaseScreen {
 
     private final BorderPane root;
     private final GridPane boardGrid;
+    private final GridPane gridWithLabels;
     private final Label titleLabel;
     private final Label subtitleLabel;
+    private final Button autoBtn;
+    private final Button readyBtn;
+    private final VBox shipPalette;
+    private final java.util.Set<Coordinate> previewCells = new java.util.HashSet<>();
+    private boolean previewValid = false;
+    private int previewAnchorRow = -1;
+    private int previewAnchorCol = -1;
 
     private GuiGameSession session;
+    private ShipType selectedShip = null;
+    private boolean placeHorizontal = true;
 
     public SetupScreen(ScreenManager manager) {
         super(manager);
@@ -42,53 +57,115 @@ public class SetupScreen extends BaseScreen {
         root.setTop(titleBox);
 
         boardGrid = createEmptyGrid(10, 10);
+        gridWithLabels = wrapWithLabels(boardGrid);
 
-        HBox centerBox = new HBox(boardGrid);
+        shipPalette = new VBox(10);
+        shipPalette.setAlignment(Pos.TOP_CENTER);
+        shipPalette.setPadding(new Insets(0, 10, 0, 0));
+        rebuildShipPalette();
+
+        HBox centerBox = new HBox(shipPalette, gridWithLabels);
         centerBox.setAlignment(Pos.CENTER); // center the grid
         root.setCenter(centerBox);
 
         // bottom controls
-        Button autoBtn = new Button("Auto Setup");
-        Button manualBtn = new Button("Manual Setup (WIP)");
-        manualBtn.setDisable(true);
-        Button readyBtn = new Button("Ready");
+        autoBtn = new Button("Auto Setup");
+        Button rotateBtn = new Button("Rotate (R)");
+        Button resetBtn = new Button("Reset");
+        readyBtn = new Button("Ready");
         Button backBtn = new Button("Back");
 
         autoBtn.setOnAction(e -> autoSetup());
-        readyBtn.setOnAction(e -> manager.show(ScreenId.PLAYING));
+        rotateBtn.setOnAction(e -> toggleOrientation());
+        resetBtn.setOnAction(e -> resetManual());
+        readyBtn.setOnAction(e -> handleReady());
         backBtn.setOnAction(e -> {
+            if (manager.getCurrentSession() != null) {
+                manager.getCurrentSession().close();
+            }
             manager.clearCurrentSession();
             manager.goBack();
         });
 
-        HBox bottomBar = new HBox(15, autoBtn, manualBtn, readyBtn, backBtn);
+        HBox bottomBar = new HBox(15, autoBtn, rotateBtn, resetBtn, readyBtn, backBtn);
         bottomBar.setAlignment(Pos.CENTER);
         bottomBar.setPadding(new Insets(10, 0, 0, 0));
         root.setBottom(bottomBar);
+
+        root.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.R) {
+                toggleOrientation();
+            }
+        });
     }
 
     @Override
     public void onShow() {
-        if (manager.getCurrentSession() == null) {
+        GuiGameSession existing = manager.getCurrentSession();
+        boolean canReuse = existing != null && existing.isOnline() && !existing.getState().isGameOver();
+        if (!canReuse) {
             GuiGameSession.Mode mode = manager.getPlannedMode();
             session = new GuiGameSession(mode, manager.getPendingJoinCode());
             manager.setCurrentSession(session);
         } else {
-            session = manager.getCurrentSession();
+            session = existing;
         }
         if (session.isOnline() && session.isHost()) {
             subtitleLabel.setText("Lobby code: " + session.getLobbyCode());
         } else {
             subtitleLabel.setText("");
         }
+        readyBtn.setDisable(false);
+        autoBtn.setDisable(false);
+        clearPreview();
         refreshBoardView();
+        rebuildShipPalette();
+        root.requestFocus();
     }
 
     private void autoSetup() {
-        GuiGameSession.Mode mode = manager.getPlannedMode();
-        session = new GuiGameSession(mode, manager.getPendingJoinCode());
-        manager.setCurrentSession(session);
+        if (session == null) return;
+        session.randomizeLocalFleet();
+        selectedShip = null;
+        placeHorizontal = true;
+        readyBtn.setDisable(false);
+        autoBtn.setDisable(false);
         refreshBoardView();
+        rebuildShipPalette();
+    }
+
+    private void handleReady() {
+        if (session == null) return;
+        Board board = session.getLocalPlayer().getOwnBoard();
+        if (board.getShips().size() < ShipType.values().length) {
+            subtitleLabel.setText("Place all ships before readying up.");
+            return;
+        }
+
+        if (!session.isOnline()) {
+            manager.show(ScreenId.PLAYING);
+            return;
+        }
+
+        subtitleLabel.setText("Sending layout... waiting for opponent");
+        readyBtn.setDisable(true);
+        autoBtn.setDisable(true);
+
+        Thread t = new Thread(() -> {
+            try {
+                session.syncPlacementsOnReady();
+                Platform.runLater(() -> manager.show(ScreenId.PLAYING));
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    subtitleLabel.setText("Sync failed: " + ex.getMessage());
+                    readyBtn.setDisable(false);
+                    autoBtn.setDisable(false);
+                    manager.show(ScreenId.DISCONNECTED);
+                });
+            }
+        }, "setup-ready-sync");
+        t.setDaemon(true);
+        t.start();
     }
 
     private GridPane createEmptyGrid(int rows, int cols) {
@@ -101,9 +178,15 @@ public class SetupScreen extends BaseScreen {
                 Rectangle cell = new Rectangle(CELL_SIZE, CELL_SIZE);
                 cell.setFill(Color.DARKCYAN);
                 cell.setStroke(Color.web("#002b36"));
+                int fr = r;
+                int fc = c;
+                cell.setOnMouseClicked(e -> handleCellClick(fr, fc));
+                cell.setOnMouseEntered(e -> showPreview(fr, fc));
                 grid.add(cell, c, r);
             }
         }
+        grid.setOnMouseExited(e -> clearPreview());
+        grid.setOnMouseReleased(e -> attemptPlaceFromPreview());
         return grid;
     }
 
@@ -118,9 +201,31 @@ public class SetupScreen extends BaseScreen {
             int col = (cIdx == null ? 0 : cIdx);
             int row = (rIdx == null ? 0 : rIdx);
 
-            CellState cs = board.getCellState(new Coordinate(row, col));
-            rect.setFill(colorForOwnCell(cs));
+            Coordinate coord = new Coordinate(row, col);
+            CellState cs = board.getCellState(coord);
+            if (selectedShip != null && previewCells.contains(coord)) {
+                rect.setFill(previewValid ? Color.LIGHTGREEN : Color.ORANGERED);
+            } else {
+                rect.setFill(colorForOwnCell(cs));
+            }
         }
+    }
+
+    private void handleCellClick(int row, int col) {
+        if (session == null || selectedShip == null) return;
+        Board board = session.getLocalPlayer().getOwnBoard();
+        Coordinate start = new Coordinate(row, col);
+        if (!board.canPlaceShip(selectedShip, start, placeHorizontal)) {
+            subtitleLabel.setText("Cannot place " + selectedShip + " here.");
+            return;
+        }
+        Ship ship = new Ship(selectedShip);
+        board.placeShip(ship, start, placeHorizontal);
+        selectedShip = null;
+        subtitleLabel.setText("Placed ship. Remaining ships shown on left.");
+        rebuildShipPalette();
+        refreshBoardView();
+        clearPreview();
     }
 
     private Color colorForOwnCell(CellState cs) {
@@ -135,5 +240,140 @@ public class SetupScreen extends BaseScreen {
     @Override
     public Region getRoot() {
         return root;
+    }
+
+    private void toggleOrientation() {
+        placeHorizontal = !placeHorizontal;
+        subtitleLabel.setText("Orientation: " + (placeHorizontal ? "Horizontal" : "Vertical"));
+    }
+
+    private void resetManual() {
+        if (session == null) return;
+        session.getLocalPlayer().getOwnBoard().reset();
+        selectedShip = null;
+        placeHorizontal = true;
+        readyBtn.setDisable(false);
+        autoBtn.setDisable(false);
+        subtitleLabel.setText("Ships reset. Choose a ship to place.");
+        rebuildShipPalette();
+        refreshBoardView();
+        clearPreview();
+    }
+
+    private void rebuildShipPalette() {
+        shipPalette.getChildren().clear();
+        Label header = new Label("Ships");
+        shipPalette.getChildren().add(header);
+        Board board = session == null ? null : session.getLocalPlayer().getOwnBoard();
+        if (board == null) return;
+
+        java.util.EnumSet<ShipType> placed = java.util.EnumSet.noneOf(ShipType.class);
+        for (Ship ship : board.getShips()) {
+            placed.add(ship.getType());
+        }
+        if (placed.isEmpty()) {
+            selectedShip = null;
+        }
+        for (ShipType type : ShipType.values()) {
+            if (placed.contains(type)) continue;
+
+            Rectangle r = new Rectangle(CELL_SIZE * type.getLength(), CELL_SIZE * 0.7, Color.LIGHTGRAY);
+            r.setArcWidth(6);
+            r.setArcHeight(6);
+            Label l = new Label(type.name());
+            VBox box = new VBox(4, r, l);
+            box.setAlignment(Pos.CENTER);
+            box.setOnMouseClicked(e -> {
+                selectedShip = type;
+                subtitleLabel.setText("Selected " + type + " (" + (placeHorizontal ? "Horizontal" : "Vertical") + ")");
+            });
+            shipPalette.getChildren().add(box);
+        }
+
+        if (shipPalette.getChildren().size() == 1) {
+            shipPalette.getChildren().add(new Label("All ships placed"));
+        }
+    }
+
+    private GridPane wrapWithLabels(GridPane grid) {
+        GridPane outer = new GridPane();
+        outer.setHgap(2);
+        outer.setVgap(2);
+
+        // Column constraints: first for labels, then 10 for cells
+        outer.getColumnConstraints().clear();
+        ColumnConstraints labelCol = new ColumnConstraints();
+        labelCol.setPrefWidth(CELL_SIZE * 0.8);
+        labelCol.setHalignment(javafx.geometry.HPos.CENTER);
+        outer.getColumnConstraints().add(labelCol);
+        for (int i = 0; i < 10; i++) {
+            ColumnConstraints cc = new ColumnConstraints();
+            cc.setPrefWidth(CELL_SIZE);
+            cc.setHalignment(javafx.geometry.HPos.CENTER);
+            outer.getColumnConstraints().add(cc);
+        }
+
+        outer.getRowConstraints().clear();
+        RowConstraints labelRow = new RowConstraints();
+        labelRow.setPrefHeight(CELL_SIZE * 0.8);
+        labelRow.setValignment(javafx.geometry.VPos.CENTER);
+        outer.getRowConstraints().add(labelRow);
+        for (int i = 0; i < 10; i++) {
+            RowConstraints rr = new RowConstraints();
+            rr.setPrefHeight(CELL_SIZE);
+            rr.setValignment(javafx.geometry.VPos.CENTER);
+            outer.getRowConstraints().add(rr);
+        }
+
+        // top headers A-J
+        for (int c = 0; c < 10; c++) {
+            Label lbl = new Label(String.valueOf((char) ('A' + c)));
+            lbl.setTextFill(Color.WHITE);
+            outer.add(lbl, c + 1, 0);
+        }
+        // left headers 1-10
+        for (int r = 0; r < 10; r++) {
+            Label lbl = new Label(String.valueOf(r + 1));
+            lbl.setTextFill(Color.WHITE);
+            outer.add(lbl, 0, r + 1);
+        }
+
+        outer.add(grid, 1, 1, 10, 10);
+        return outer;
+    }
+
+    private void showPreview(int anchorRow, int anchorCol) {
+        if (session == null) return;
+        if (selectedShip == null) {
+            clearPreview();
+            return;
+        }
+        previewCells.clear();
+        previewAnchorRow = anchorRow;
+        previewAnchorCol = anchorCol;
+        Board board = session.getLocalPlayer().getOwnBoard();
+        Coordinate start = new Coordinate(anchorRow, anchorCol);
+        previewValid = board.canPlaceShip(selectedShip, start, placeHorizontal);
+
+        int len = selectedShip.getLength();
+        for (int i = 0; i < len; i++) {
+            int r = anchorRow + (placeHorizontal ? 0 : i);
+            int c = anchorCol + (placeHorizontal ? i : 0);
+            previewCells.add(new Coordinate(r, c));
+        }
+        refreshBoardView();
+    }
+
+    private void clearPreview() {
+        previewCells.clear();
+        previewValid = false;
+        previewAnchorRow = -1;
+        previewAnchorCol = -1;
+        refreshBoardView();
+    }
+
+    private void attemptPlaceFromPreview() {
+        if (selectedShip == null || !previewValid || previewAnchorRow < 0) return;
+        handleCellClick(previewAnchorRow, previewAnchorCol);
     }
 }

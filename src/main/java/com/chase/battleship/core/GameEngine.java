@@ -32,6 +32,7 @@ public class GameEngine {
         Board enemyBoard = other.getOwnBoard();
         if (enemyBoard.allShipsSunkByGrid()) {
             gameState.endGame();
+            gameState.setWinner(current);
             msg += "\n" + current.getName() + " wins!";
         } else {
             gameState.nextTurn();
