@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -18,20 +19,35 @@ public class TitleScreen extends BaseScreen {
         super(screenManager);
 
         Label title = new Label("NEO-RETRO BATTLESHIP");
-        title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 42px; -fx-font-family: 'Consolas'; -fx-effect: dropshadow(one-pass-box, #00151f, 6, 0, 0, 2);");
+        title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 46px; -fx-font-family: 'Press Start 2P'; -fx-effect: dropshadow(one-pass-box, #00151f, 6, 0, 0, 2);");
 
         menu = new RetroMenu(java.util.List.of(
                 new RetroMenu.Option("Singleplayer", () -> screenManager.show(ScreenId.SINGLE_PLAYER_SELECT)),
                 new RetroMenu.Option("Multiplayer", () -> screenManager.show(ScreenId.MULTI_PLAYER_SELECT)),
+                new RetroMenu.Option("Controls", () -> screenManager.show(ScreenId.CONTROLS)),
                 new RetroMenu.Option("Quit", Platform::exit)
         ));
 
         Label hint = new Label("Arrow keys / Enter or mouse. Esc for settings.");
-        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 12px;");
+        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 10px; -fx-font-family: 'Press Start 2P';");
 
-        VBox layout = new VBox(18, title, menu, hint);
-        layout.setAlignment(Pos.CENTER);
-        layout.setStyle("-fx-padding: 40;");
+        VBox menuBox = new VBox(18, menu);
+        menuBox.setAlignment(Pos.TOP_LEFT);
+        menuBox.setPadding(new javafx.geometry.Insets(120, 0, 0, 60));
+
+        StackPane titlePane = new StackPane(title);
+        titlePane.setPadding(new javafx.geometry.Insets(60, 0, 0, 0));
+        titlePane.setAlignment(Pos.TOP_CENTER);
+
+        StackPane hintPane = new StackPane(hint);
+        hintPane.setAlignment(Pos.BOTTOM_RIGHT);
+        hintPane.setPadding(new javafx.geometry.Insets(0, 30, 30, 0));
+
+        BorderPane layout = new BorderPane();
+        layout.setTop(titlePane);
+        layout.setLeft(menuBox);
+        layout.setCenter(new StackPane()); // spacer
+        layout.setBottom(hintPane);
 
         settingsOverlay = new MenuSettingsOverlay(null);
         StackPane wrapped = settingsOverlay.wrap(layout);

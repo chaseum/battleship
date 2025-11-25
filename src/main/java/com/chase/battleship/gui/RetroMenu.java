@@ -35,7 +35,7 @@ public class RetroMenu extends VBox {
         for (int i = 0; i < options.size(); i++) {
             final int idx = i;
             Label l = new Label();
-            l.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 22px; -fx-font-family: 'Consolas';");
+            l.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 18px; -fx-font-family: 'Press Start 2P';");
             l.setOnMouseEntered(e -> setSelectedIndex(idx));
             l.setOnMouseClicked(e -> activate(idx));
             labels.add(l);

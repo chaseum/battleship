@@ -37,11 +37,12 @@ public class GuiGameSession {
     private final boolean online;
     private final boolean isHost;
     private final String lobbyCode;
-    private final OnlinePeerConnection net;
-    private final String joinCode;
-    private Boolean localWon;
-    private TurnAction lastRemoteAction;
-    private TurnAction lastAction;
+	private final OnlinePeerConnection net;
+	private final String joinCode;
+	private Boolean localWon;
+	private TurnAction lastRemoteAction;
+	private TurnAction lastAction;
+	private boolean lastActionByLocal;
 
     public GuiGameSession(Mode uiMode) {
         this(uiMode, null);
@@ -256,13 +257,17 @@ public class GuiGameSession {
         return localWon;
     }
 
-    public TurnAction getLastRemoteAction() {
-        return lastRemoteAction;
-    }
+	public TurnAction getLastRemoteAction() {
+		return lastRemoteAction;
+	}
 
-    public TurnAction getLastAction() {
-        return lastAction;
-    }
+	public TurnAction getLastAction() {
+		return lastAction;
+	}
+
+	public boolean wasLastActionByLocal() {
+		return lastActionByLocal;
+	}
 
     public boolean isCurrentPlayerHuman() {
         PlayerState current = state.getCurrentPlayer();
@@ -282,6 +287,7 @@ public class GuiGameSession {
             if (isHost) {
                 TurnResult res = engine.processTurn(action);
                 lastAction = action;
+                lastActionByLocal = true;
                 net.broadcastResult(action, res, state);
                 if (state.isGameOver()) {
                     updateLocalWinFlagFromState();
@@ -290,6 +296,7 @@ public class GuiGameSession {
             } else {
                 net.sendLocalMove(action);
                 lastAction = action;
+                lastActionByLocal = true;
                 OnlinePeerConnection.RemoteUpdate update = net.waitForUpdate(engine);
                 if (update.winner() != null) {
                     state.setWinner(update.winner());
@@ -303,6 +310,7 @@ public class GuiGameSession {
             updateLocalWinFlagFromState();
         }
         lastAction = action;
+        lastActionByLocal = true;
         return res;
     }
 
@@ -319,6 +327,7 @@ public class GuiGameSession {
                     TurnAction action = net.waitForRemoteMove();
                     lastRemoteAction = action;
                     lastAction = action;
+                    lastActionByLocal = false;
                     TurnResult res = engine.processTurn(action);
                     net.broadcastResult(action, res, state);
                     if (state.isGameOver()) {
@@ -332,6 +341,7 @@ public class GuiGameSession {
                 lastRemoteAction = update.action();
                 if (update.action() != null) {
                     lastAction = update.action();
+                    lastActionByLocal = false;
                 }
                 if (update.winner() != null) {
                     state.setWinner(update.winner());
@@ -347,6 +357,7 @@ public class GuiGameSession {
 
         TurnAction aiAction = agent.chooseAction(state, isP1);
         lastAction = aiAction;
+        lastActionByLocal = false;
         return engine.processTurn(aiAction);
     }
 }

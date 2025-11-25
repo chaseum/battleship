@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class PlayingScreen extends BaseScreen {
 
-    private static final int CELL_SIZE = 28;
+    private static final int CELL_SIZE = 36;
     private static final Color WATER_COLOR = Color.web("#6f8f89"); // softened teal base
     private static final Color SHIP_TINT = Color.web("#8faea5");  // lighter teal for ships
     private static final Color MISS_COLOR = Color.web("#555555"); // medium grey
@@ -37,6 +37,7 @@ public class PlayingScreen extends BaseScreen {
     private final Pane myShipOverlay;
     private final Pane myEffectOverlay;
     private final Pane enemyEffectOverlay;
+    private final javafx.scene.shape.Rectangle enemyHoverRect = new javafx.scene.shape.Rectangle();
     private final StackPane myBoardStack;
     private final Label turnLabel;
     private final ImageView turnAvatar;
@@ -54,6 +55,7 @@ public class PlayingScreen extends BaseScreen {
     private final java.util.List<Coordinate> sonarHighlights = new java.util.ArrayList<>();
     private final java.util.Map<Coordinate, CellState> lastMyBoardStates = new java.util.HashMap<>();
     private final java.util.Map<Coordinate, CellState> lastEnemySeenStates = new java.util.HashMap<>();
+    private final java.util.Set<String> sunkMyShipsShown = new java.util.HashSet<>();
 
     private Button sonarBtn;
     private Button multiBtn;
@@ -70,25 +72,23 @@ public class PlayingScreen extends BaseScreen {
         super(manager);
 
         root = new BorderPane();
-        root.setStyle("-fx-background-color: #001b29;");
+        root.setStyle("-fx-background-color: linear-gradient(#0d3a55, #0a2f45);");
         root.setPadding(new Insets(20));
-        root.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.ESCAPE) {
-                toggleSettingsOverlay();
-            }
-        });
 
         turnLabel = new Label("Your turn");
         turnLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 20px;");
 
         turnAvatar = new ImageView(AssetLibrary.playerOne());
-        turnAvatar.setFitHeight(28);
-        turnAvatar.setFitWidth(28);
+        turnAvatar.setFitHeight(34);
+        turnAvatar.setFitWidth(34);
         turnAvatar.setPreserveRatio(true);
         turnAvatar.setSmooth(false);
         turnAvatar.setEffect(new DropShadow(8, Color.web("#061826")));
 
-        HBox topBar = new HBox(10, turnAvatar, turnLabel);
+        actionLabel = new Label("");
+        actionLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 16px;");
+
+        HBox topBar = new HBox(14, turnAvatar, turnLabel, actionLabel);
         topBar.setAlignment(Pos.TOP_LEFT);
         root.setTop(topBar);
 
@@ -101,6 +101,10 @@ public class PlayingScreen extends BaseScreen {
         myEffectOverlay.setMouseTransparent(true);
         myEffectOverlay.setPickOnBounds(false);
         myEffectOverlay.setPrefSize(boardPixels, boardPixels);
+        enemyHoverRect.setVisible(false);
+        enemyHoverRect.setMouseTransparent(true);
+        enemyHoverRect.setArcWidth(6);
+        enemyHoverRect.setArcHeight(6);
         myBoardStack = new StackPane(myGrid, myEffectOverlay, myShipOverlay);
         myBoardStack.setPickOnBounds(false);
         enemyGrid = createBoardGrid(true);
@@ -108,7 +112,7 @@ public class PlayingScreen extends BaseScreen {
         enemyEffectOverlay.setMouseTransparent(true);
         enemyEffectOverlay.setPickOnBounds(false);
         enemyEffectOverlay.setPrefSize(boardPixels, boardPixels);
-        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyEffectOverlay);
+        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyHoverRect, enemyEffectOverlay);
         enemyBoardStack.setPickOnBounds(false);
 
         Label myLabel = new Label("Your Sea");
@@ -127,24 +131,19 @@ public class PlayingScreen extends BaseScreen {
         fleetTitle.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 16px;");
         fleetPanel = new VBox(10);
         fleetPanel.setAlignment(Pos.CENTER_LEFT);
-        fleetPanel.setMinWidth(160);
+        fleetPanel.setMinWidth(150);
         fleetPanel.getChildren().add(fleetTitle);
 
         HBox boardsBox = new HBox(80, myBox, enemyBox);
         boardsBox.setAlignment(Pos.CENTER);
 
-        HBox mainRow = new HBox(30, fleetPanel, boardsBox);
+        HBox mainRow = new HBox(48, fleetPanel, boardsBox);
         mainRow.setAlignment(Pos.CENTER);
 
         messageLabel = new Label("");
         messageLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 14px;");
         messageLabel.setMaxWidth(520);
         messageLabel.setMinHeight(22);
-
-        actionLabel = new Label("");
-        actionLabel.setStyle("-fx-text-fill: #f0f0f0;");
-        actionLabel.setMaxWidth(520);
-        actionLabel.setMinHeight(22);
 
         hotbar = new HBox(10);
         hotbar.setAlignment(Pos.CENTER);
@@ -176,6 +175,11 @@ public class PlayingScreen extends BaseScreen {
 
         Button closeSettings = new Button("Close");
         closeSettings.setOnAction(e -> toggleSettingsOverlay());
+        Button controlsBtn = new Button("Controls");
+        controlsBtn.setOnAction(e -> {
+            toggleSettingsOverlay();
+            manager.show(ScreenId.CONTROLS);
+        });
         Button backFromSettings = new Button("Back to Title");
         backFromSettings.setOnAction(e -> {
             toggleSettingsOverlay();
@@ -190,6 +194,7 @@ public class PlayingScreen extends BaseScreen {
                 new Label("Settings"),
                 new Label("Volume"), volumeSlider,
                 new Label("Game Speed"), speedSlider,
+                controlsBtn,
                 backFromSettings,
                 closeSettings);
         settingsBox.setAlignment(Pos.CENTER);
@@ -203,6 +208,21 @@ public class PlayingScreen extends BaseScreen {
         overlayPane.setMouseTransparent(true);
         StackPane.setAlignment(settingsBox, Pos.CENTER);
         settingsOverlay = overlayPane;
+        root.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                toggleSettingsOverlay();
+                return;
+            }
+            if (settingsOverlay.isVisible() || waitingForHandOff) {
+                return;
+            }
+            switch (e.getCode()) {
+                case DIGIT1, NUMPAD1 -> useSonar();
+                case DIGIT2, NUMPAD2 -> useMultishot();
+                case DIGIT3, NUMPAD3 -> useEmp();
+                default -> { }
+            }
+        });
 
         // handoff overlay for local 2P
         handoffLabel = new Label("");
@@ -230,6 +250,7 @@ public class PlayingScreen extends BaseScreen {
         sonarHighlights.clear();
         lastMyBoardStates.clear();
         lastEnemySeenStates.clear();
+        sunkMyShipsShown.clear();
         myEffectOverlay.getChildren().clear();
         enemyEffectOverlay.getChildren().clear();
         lastAnimatedAction = null;
@@ -255,22 +276,27 @@ public class PlayingScreen extends BaseScreen {
 
     private GridPane createBoardGrid(boolean enemy) {
         GridPane grid = new GridPane();
-        grid.setHgap(2);
-        grid.setVgap(2);
+        grid.setHgap(3);
+        grid.setVgap(3);
 
         for (int r = 0; r < 10; r++) {
             for (int c = 0; c < 10; c++) {
                 Rectangle cell = new Rectangle(CELL_SIZE, CELL_SIZE);
                 cell.setFill(enemy ? colorForEnemyCell(CellState.EMPTY) : colorForOwnCell(CellState.EMPTY));
-                cell.setStroke(Color.web("#333333"));
+                cell.setStroke(Color.web("#123547"));
+                cell.setStrokeType(javafx.scene.shape.StrokeType.INSIDE);
                 grid.add(cell, c, r);
 
                 if (enemy) {
                     final int fr = r;
                     final int fc = c;
                     cell.setOnMouseClicked(e -> handleEnemyClick(fr, fc));
+                    cell.setOnMouseEntered(e -> showEnemyHover(fr, fc));
                 }
             }
+        }
+        if (enemy) {
+            grid.setOnMouseExited(e -> clearEnemyHover());
         }
         return grid;
     }
@@ -283,6 +309,7 @@ public class PlayingScreen extends BaseScreen {
             updateMessages("Not your turn", "Not your turn");
             return;
         }
+        updateEnemyHoverState(row, col);
         if (!session.isCurrentPlayerHuman()) {
             actionLabel.setTextFill(Color.ORANGERED);
             updateMessages("Not your turn", "Not your turn");
@@ -406,6 +433,7 @@ public class PlayingScreen extends BaseScreen {
         redrawOwnBoard(myBoard);
         redrawEnemyBoard(myTracking);
         refreshFleetPanel(me);
+        animateSunkShips(myBoard);
 
         boolean currentHuman = session.isCurrentPlayerHuman();
         updateTurnBanner(current, me, currentHuman);
@@ -419,7 +447,7 @@ public class PlayingScreen extends BaseScreen {
         if (newestAction != null && !newestAction.equals(lastAnimatedAction)) {
             if (newestAction instanceof UseAbilityAction abilityAction) {
                 if (abilityAction.abilityType() == AbilityType.SONAR) {
-                    animateSonar(abilityAction.target() != null ? abilityAction.target().coordinate() : null);
+                    animateSonar(abilityAction.target() != null ? abilityAction.target().coordinate() : null, session.wasLastActionByLocal());
                 }
                 if (abilityAction.abilityType() == AbilityType.EMP) {
                     animateEmp();
@@ -444,6 +472,42 @@ public class PlayingScreen extends BaseScreen {
             rect.setFill(colorForOwnCell(cs));
         }
         renderOwnShipOverlay(board);
+    }
+
+    private void animateSunkShips(Board board) {
+        if (board == null) return;
+        double stepX = CELL_SIZE + myGrid.getHgap();
+        double stepY = CELL_SIZE + myGrid.getVgap();
+        for (Ship ship : board.getShips()) {
+            if (!ship.isSunk()) continue;
+            String key = ship.getType().name() + ship.getCoordinates();
+            if (sunkMyShipsShown.contains(key)) continue;
+            sunkMyShipsShown.add(key);
+
+            int minRow = ship.getCoordinates().stream().mapToInt(Coordinate::row).min().orElse(0);
+            int maxRow = ship.getCoordinates().stream().mapToInt(Coordinate::row).max().orElse(0);
+            int minCol = ship.getCoordinates().stream().mapToInt(Coordinate::col).min().orElse(0);
+            int maxCol = ship.getCoordinates().stream().mapToInt(Coordinate::col).max().orElse(0);
+
+            double x = minCol * stepX;
+            double y = minRow * stepY;
+            double w = (maxCol - minCol + 1) * stepX - myGrid.getHgap();
+            double h = (maxRow - minRow + 1) * stepY - myGrid.getVgap();
+
+            Rectangle flash = new Rectangle(w, h, Color.color(1, 0.6, 0.6, 0.45));
+            flash.setLayoutX(x);
+            flash.setLayoutY(y);
+            flash.setMouseTransparent(true);
+            myEffectOverlay.getChildren().add(flash);
+
+            Timeline tl = new Timeline(
+                    new KeyFrame(Duration.ZERO, new KeyValue(flash.opacityProperty(), 0.0)),
+                    new KeyFrame(Duration.millis(150), new KeyValue(flash.opacityProperty(), 0.9)),
+                    new KeyFrame(Duration.millis(520), new KeyValue(flash.opacityProperty(), 0.0))
+            );
+            tl.setOnFinished(e -> myEffectOverlay.getChildren().remove(flash));
+            tl.play();
+        }
     }
 
     private void renderOwnShipOverlay(Board board) {
@@ -559,6 +623,7 @@ public class PlayingScreen extends BaseScreen {
 
     private void setupAbilityButtons() {
         bottomBox.getChildren().clear();
+        hotbar.getChildren().clear();
 
         if (!session.getConfig().getGameMode().isNeoRetro()) {
             bottomBox.getChildren().addAll(hotbar);
@@ -614,6 +679,7 @@ public class PlayingScreen extends BaseScreen {
 
     private void useSonar() {
         if (session == null || isProcessing) return;
+        if (!session.getConfig().getGameMode().isNeoRetro()) return;
         if (!session.isCurrentPlayerHuman()) return;
         PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
         if (me.abilitiesLocked()) {
@@ -632,6 +698,7 @@ public class PlayingScreen extends BaseScreen {
 
     private void useMultishot() {
         if (session == null || isProcessing) return;
+        if (!session.getConfig().getGameMode().isNeoRetro()) return;
         if (!session.isCurrentPlayerHuman()) return;
         PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
         if (me.abilitiesLocked()) {
@@ -649,6 +716,7 @@ public class PlayingScreen extends BaseScreen {
 
     private void useEmp() {
         if (session == null || isProcessing) return;
+        if (!session.getConfig().getGameMode().isNeoRetro()) return;
         if (!session.isCurrentPlayerHuman()) return;
         PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
         if (me.abilitiesLocked()) {
@@ -748,6 +816,36 @@ public class PlayingScreen extends BaseScreen {
         syncFromState();
     }
 
+    private void showEnemyHover(int row, int col) {
+        updateEnemyHoverState(row, col);
+        enemyHoverRect.setWidth(CELL_SIZE + enemyGrid.getHgap());
+        enemyHoverRect.setHeight(CELL_SIZE + enemyGrid.getVgap());
+    }
+
+    private void clearEnemyHover() {
+        enemyHoverRect.setVisible(false);
+    }
+
+    private void updateEnemyHoverState(int row, int col) {
+        if (session == null || enemyGrid.isDisable()) {
+            enemyHoverRect.setVisible(false);
+            return;
+        }
+        PlayerState me = session.getState().getCurrentPlayer();
+        Board tracking = me.getTrackingBoard();
+        CellState state = tracking.getCellState(new Coordinate(row, col));
+        boolean canFire = state == CellState.EMPTY && session.isCurrentPlayerHuman() && !waitingForHandOff;
+
+        double stepX = CELL_SIZE + enemyGrid.getHgap();
+        double stepY = CELL_SIZE + enemyGrid.getVgap();
+        enemyHoverRect.setWidth(CELL_SIZE);
+        enemyHoverRect.setHeight(CELL_SIZE);
+        enemyHoverRect.setLayoutX(col * stepX);
+        enemyHoverRect.setLayoutY(row * stepY);
+        enemyHoverRect.setFill(canFire ? Color.color(0.7, 0.9, 1.0, 0.3) : Color.color(1.0, 0.3, 0.3, 0.3));
+        enemyHoverRect.setVisible(true);
+    }
+
     private void refreshFleetPanel(PlayerState me) {
         fleetPanel.getChildren().clear();
         fleetPanel.getChildren().add(fleetTitle);
@@ -782,8 +880,10 @@ public class PlayingScreen extends BaseScreen {
 
             Label name = new Label(type.name());
             name.setTextFill(Color.web("#e6f4ff"));
+            name.setStyle("-fx-font-size: 12px;");
             Label status = new Label(sunk ? "SUNK" : (damageRatio > 0 ? "HIT" : "READY"));
             status.setTextFill(sunk ? Color.web("#ff8fa0") : (damageRatio > 0 ? Color.web("#ffe599") : Color.web("#9ff7ff")));
+            status.setStyle("-fx-font-size: 11px;");
 
             VBox textCol = new VBox(2, name, status);
             HBox row = new HBox(10, artCard, textCol);
@@ -835,7 +935,7 @@ public class PlayingScreen extends BaseScreen {
         return null;
     }
 
-    private double[] cellOrigin(GridPane grid, Coordinate coord) {
+    private double[] cellOrigin(GridPane grid, Pane overlay, Coordinate coord) {
         for (Node node : grid.getChildren()) {
             if (!(node instanceof Rectangle)) continue;
             Integer cIdx = GridPane.getColumnIndex(node);
@@ -843,8 +943,9 @@ public class PlayingScreen extends BaseScreen {
             int c = cIdx == null ? 0 : cIdx;
             int r = rIdx == null ? 0 : rIdx;
             if (r == coord.row() && c == coord.col()) {
-                var b = node.getBoundsInParent();
-                return new double[]{b.getMinX(), b.getMinY()};
+                var sceneBounds = node.localToScene(node.getBoundsInLocal());
+                var local = overlay.sceneToLocal(sceneBounds);
+                return new double[]{local.getMinX(), local.getMinY()};
             }
         }
         double stepX = CELL_SIZE + grid.getHgap();
@@ -916,9 +1017,11 @@ public class PlayingScreen extends BaseScreen {
     private void animateShots(java.util.List<ShotMark> marks, Pane overlay, GridPane grid, boolean enemyBoard) {
         if (marks.isEmpty()) return;
         TurnAction newestAction = session != null ? session.getLastAction() : null;
+        boolean lastByLocal = session != null && session.wasLastActionByLocal();
         boolean isMulti = enemyBoard
                 && newestAction instanceof UseAbilityAction use
-                && use.abilityType() == AbilityType.MULTISHOT;
+                && use.abilityType() == AbilityType.MULTISHOT
+                && lastByLocal;
         boolean stagger = isMulti;
 
         int idx = 0;
@@ -937,7 +1040,7 @@ public class PlayingScreen extends BaseScreen {
     }
 
     private void playHitEffect(Coordinate coord, Pane overlay, GridPane grid, int delayMs) {
-        double[] pos = cellOrigin(grid, coord);
+        double[] pos = cellOrigin(grid, overlay, coord);
         double x = pos[0];
         double y = pos[1];
 
@@ -970,7 +1073,7 @@ public class PlayingScreen extends BaseScreen {
     }
 
     private void playMissEffect(Coordinate coord, Pane overlay, GridPane grid, int delayMs) {
-        double[] pos = cellOrigin(grid, coord);
+        double[] pos = cellOrigin(grid, overlay, coord);
         double x = pos[0];
         double y = pos[1];
 
@@ -1003,7 +1106,7 @@ public class PlayingScreen extends BaseScreen {
     }
 
     private void playSquarePop(Coordinate coord, Pane overlay, GridPane grid, int delayMs, Color fill) {
-        double[] pos = cellOrigin(grid, coord);
+        double[] pos = cellOrigin(grid, overlay, coord);
         double x = pos[0];
         double y = pos[1];
 
@@ -1038,7 +1141,7 @@ public class PlayingScreen extends BaseScreen {
         tl.play();
     }
 
-    private void animateSonar(Coordinate center) {
+    private void animateSonar(Coordinate center, boolean byLocalPlayer) {
         Coordinate c = center != null ? center : new Coordinate(4, 4);
         java.util.List<Coordinate> centerOnly = java.util.List.of(c);
         java.util.List<Coordinate> ring = new java.util.ArrayList<>();
@@ -1049,10 +1152,13 @@ public class PlayingScreen extends BaseScreen {
             }
         }
         int cycleMs = 900;
+        Pane overlay = byLocalPlayer ? enemyEffectOverlay : myEffectOverlay;
+        GridPane grid = byLocalPlayer ? enemyGrid : myGrid;
+
         for (int i = 0; i < 3; i++) {
             int cycleDelay = i * cycleMs;
-            flashCells(enemyEffectOverlay, enemyGrid, centerOnly, Color.web("#ffe566"), cycleMs, cycleDelay);
-            flashCells(enemyEffectOverlay, enemyGrid, ring, Color.web("#f8d34a"), cycleMs, cycleDelay + 220);
+            flashCells(overlay, grid, centerOnly, Color.web("#ffe566"), cycleMs, cycleDelay);
+            flashCells(overlay, grid, ring, Color.web("#f8d34a"), cycleMs, cycleDelay + 220);
         }
     }
 
@@ -1104,7 +1210,7 @@ public class PlayingScreen extends BaseScreen {
 
         for (Coordinate c : coords) {
             if (c.row() < 0 || c.col() < 0 || c.row() >= rows || c.col() >= cols) continue;
-            double[] pos = cellOrigin(grid, c);
+            double[] pos = cellOrigin(grid, overlay, c);
             Rectangle rect = new Rectangle(CELL_SIZE, CELL_SIZE, highlight);
             rect.setOpacity(0.0);
             rect.setMouseTransparent(true);

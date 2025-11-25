@@ -173,6 +173,7 @@ public class ScreenManager {
             case WIN -> new WinScreen(this);
             case LOSE -> new LoseScreen(this);
             case DISCONNECTED -> new DisconnectedScreen(this);
+            case CONTROLS -> new ControlsScreen(this);
         };
     }
 }

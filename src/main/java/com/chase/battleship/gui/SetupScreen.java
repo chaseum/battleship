@@ -23,7 +23,7 @@ import javafx.scene.shape.Rectangle;
 
 public class SetupScreen extends BaseScreen {
 
-    private static final int CELL_SIZE = 28;
+    private static final int CELL_SIZE = 36;
     private static final Color WATER_COLOR = Color.web("#6f8f89"); // softened teal base
     private static final Color SHIP_TINT = Color.web("#8faea5");  // lighter teal for ships
     private static final Color MISS_COLOR = Color.web("#555555"); // medium grey
@@ -53,7 +53,7 @@ public class SetupScreen extends BaseScreen {
         super(manager);
 
         root = new BorderPane();
-        root.setStyle("-fx-background-color: #001b29;");
+        root.setStyle("-fx-background-color: linear-gradient(#0d3a55, #0a2f45);");
         root.setPadding(new Insets(20));
 
         titleLabel = new Label("Place Your Ships");
@@ -89,7 +89,7 @@ public class SetupScreen extends BaseScreen {
         paletteWrapper.setMinHeight(CELL_SIZE * 12);
         paletteWrapper.setPadding(new Insets(0, 10, 0, 0));
 
-        HBox centerBox = new HBox(24, paletteWrapper, gridWithLabels);
+        HBox centerBox = new HBox(32, paletteWrapper, gridWithLabels);
         centerBox.setAlignment(Pos.CENTER); // center the grid and palette together
         root.setCenter(centerBox);
 
@@ -230,14 +230,15 @@ public class SetupScreen extends BaseScreen {
 
     private GridPane createEmptyGrid(int rows, int cols) {
         GridPane grid = new GridPane();
-        grid.setHgap(2);
-        grid.setVgap(2);
+        grid.setHgap(3);
+        grid.setVgap(3);
 
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 Rectangle cell = new Rectangle(CELL_SIZE, CELL_SIZE);
                 cell.setFill(colorForOwnCell(CellState.EMPTY));
-                cell.setStroke(Color.web("#333333"));
+                cell.setStroke(Color.web("#123547"));
+                cell.setStrokeType(javafx.scene.shape.StrokeType.INSIDE);
                 int fr = r;
                 int fc = c;
                 cell.setOnMouseClicked(e -> handleCellClick(fr, fc));

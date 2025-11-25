@@ -16,13 +16,14 @@ public class GameApp extends Application {
 		this.screenManager = new ScreenManager(primaryStage);
 
 		primaryStage.setTitle("Neo-Retro Battleship");
-		// primaryStage.getIcons().add(new Image("/assets/icon.png"));
+		primaryStage.getIcons().add(new Image("/assets/images/carrier_icon.png"));
 
 		// preload pixel font for consistent styling
-		var fontStream = getClass().getResourceAsStream("/assets/images/Pixellari.ttf");
-		if (fontStream != null) {
-			Font.loadFont(fontStream, 18);
-		}
+		try (var fontStream = getClass().getResourceAsStream("/assets/images/PressStart2P.ttf")) {
+			if (fontStream != null) {
+				Font.loadFont(fontStream, 18);
+			}
+		} catch (Exception ignored) {}
 
 		screenManager.show(ScreenId.TITLE);
 

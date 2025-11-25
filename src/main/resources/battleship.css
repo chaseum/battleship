@@ -1,11 +1,38 @@
 .root {
 	-fx-background-color: #001428;
-	-fx-font-family: "Pixellari", "Consolas", "Monospaced";
-	-fx-text-fill: #e0e0ff;
+	-fx-font-family: "Press Start 2P", "PressStart2P", "Pixellari", "Consolas", "Monospaced";
+	-fx-text-fill: #e8f6ff;
+}
+
+@font-face {
+    font-family: "Press Start 2P";
+    src: url("/assets/images/PressStart2P.ttf");
 }
 
 .title-label {
 	-fx-font-size: 32px;
 	-fx-text-fill: #c0f0ff;
 	-fx-padding: 20 0 10 0;
+}
+
+.button {
+	-fx-background-color: linear-gradient(#eaf2ff, #c7d6ff);
+	-fx-text-fill: #0b2333;
+	-fx-font-size: 12px;
+	-fx-background-radius: 6;
+	-fx-border-radius: 6;
+	-fx-border-color: #6a7fa5;
+	-fx-border-width: 1;
+	-fx-effect: none;
+	-fx-padding: 10 18 10 18;
+}
+
+.button:hover {
+	-fx-background-color: linear-gradient(#f5f8ff, #d4e0ff);
+}
+
+.button:pressed {
+	-fx-translate-y: 1;
+	-fx-scale-x: 0.99;
+	-fx-scale-y: 0.99;
 }

@@ -66,10 +66,12 @@ public class DecisionTreeAI implements PlayerAgent {
 		if (earlyGame && sonar != null && sonar.isAvailable()) {
 			if (random.nextDouble() < 0.50) {
 				Coordinate center = randomUnknownCoordinate(tracking);
-				return new UseAbilityAction(
-						AbilityType.SONAR,
-						new AbilityTarget(center, 0)
-				);
+				if (center != null) {
+					return new UseAbilityAction(
+							AbilityType.SONAR,
+							new AbilityTarget(center, 0)
+					);
+				}
 			}
 		}
 
