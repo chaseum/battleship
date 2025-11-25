@@ -16,6 +16,7 @@
         <maven.compiler.release>21</maven.compiler.release>
 
         <javafx.version>21.0.2</javafx.version>
+        <javafx.modules>javafx.controls,javafx.graphics,javafx.base</javafx.modules>
         <!-- Your main class for running -->
         <exec.mainClass>com.chase.battleship.gui.GameApp</exec.mainClass>
     </properties>
@@ -60,6 +61,21 @@
         <plugins>
             <!-- other plugins ... -->
 
+            <!-- Create jar with manifest and place it in target/mods -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>${exec.mainClass}</mainClass>
+                        </manifest>
+                    </archive>
+                    <outputDirectory>${project.build.directory}/mods</outputDirectory>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
@@ -69,40 +85,16 @@
                 </configuration>
             </plugin>
 
-            <!-- Build an uber-jar for jpackage -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.3</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <shadedArtifactAttached>false</shadedArtifactAttached>
-                            <!-- keep the final jar name as the main project finalName -->
-                            <finalName>${project.build.finalName}</finalName>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>${exec.mainClass}</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
             <!-- Package a Windows .exe with bundled runtime -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
                 <configuration>
-                    <input>${project.build.directory}</input>
+                    <!-- point to folder containing main jar + dependencies -->
+                    <input>${project.build.directory}/mods</input>
                     <mainJar>${project.build.finalName}.jar</mainJar>
+                    <mainClass>${exec.mainClass}</mainClass>
                     <name>Battleship</name>
                     <!-- jpackage version must be numeric (no SNAPSHOT) -->
                     <appVersion>1.0.0</appVersion>
@@ -111,7 +103,12 @@
                     <type>APP_IMAGE</type>
                     <!-- jpackage output directory -->
                     <destination>${project.build.directory}/jpackage</destination>
-                    <javaOptions/>
+                    <icon>${project.basedir}/assets/images/icon.ico</icon>
+                    <javaOptions>
+                        <option>--module-path=$APPDIR</option>
+                        <option>--add-modules=${javafx.modules}</option>
+                        <option>--enable-native-access=javafx.graphics</option>
+                    </javaOptions>
                     <!-- Classpath mode so bundled jars are included at launch -->
                     <classPath>*</classPath>
                     <winConsole>true</winConsole>
@@ -131,7 +128,7 @@
                             <goal>copy-dependencies</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>${project.build.directory}</outputDirectory>
+                            <outputDirectory>${project.build.directory}/mods</outputDirectory>
                             <includeScope>runtime</includeScope>
                             <excludeTransitive>false</excludeTransitive>
                         </configuration>
