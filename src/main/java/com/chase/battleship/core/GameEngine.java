@@ -53,7 +53,8 @@ public class GameEngine {
             }
         }
 
-        return "Fired at " + target.row() + "," + target.col() + " => " + outcome;
+        char colLetter = (char) ('A' + target.col());
+        return "Fired at " + (target.row() + 1) + "," + colLetter + " => " + outcome;
     }
 
     private String handleAbility(PlayerState current, PlayerState other, UseAbilityAction use) {

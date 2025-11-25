@@ -2,6 +2,8 @@ package com.chase.battleship.gui;
 
 import javafx.animation.Animation;
 import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.animation.TranslateTransition;
 import javafx.scene.control.Label;
 import javafx.scene.shape.Rectangle;
@@ -14,6 +16,7 @@ import javafx.util.Duration;
 public final class FxAnimations {
 
     private static final String MARQUEE_KEY = "fx-marquee";
+    private static final String TYPEWRITER_KEY = "fx-typewriter";
 
     private FxAnimations() {
     }
@@ -60,5 +63,42 @@ public final class FxAnimations {
         tt.play();
 
         label.getProperties().put(MARQUEE_KEY, tt);
+    }
+
+    /**
+     * Simple typewriter text animation for a Label.
+     */
+    public static void typewriter(Label label, String text, Duration duration) {
+        if (label == null) {
+            return;
+        }
+        stopTypewriter(label);
+
+        String target = text == null ? "" : text;
+        if (target.isEmpty()) {
+            label.setText("");
+            return;
+        }
+
+        double perCharMs = duration.toMillis() / Math.max(target.length(), 1);
+        Timeline timeline = new Timeline();
+        for (int i = 0; i < target.length(); i++) {
+            final int index = i;
+            timeline.getKeyFrames().add(
+                new KeyFrame(Duration.millis(perCharMs * (i + 1)),
+                    event -> label.setText(target.substring(0, index + 1)))
+            );
+        }
+        timeline.setOnFinished(e -> label.setText(target));
+        timeline.playFromStart();
+
+        label.getProperties().put(TYPEWRITER_KEY, timeline);
+    }
+
+    public static void stopTypewriter(Label label) {
+        Object anim = label.getProperties().remove(TYPEWRITER_KEY);
+        if (anim instanceof Animation animation) {
+            animation.stop();
+        }
     }
 }

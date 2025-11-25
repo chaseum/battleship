@@ -42,7 +42,7 @@ public class MultiPlayerScreen extends BaseScreen {
         ));
 
         Label hint = new Label("Arrow keys / Enter or mouse. Esc for settings/back.");
-        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 11px; -fx-font-family: 'Press Start 2P';");
+        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 9px; -fx-font-family: 'Press Start 2P';");
 
         VBox box = new VBox(18, label, menu, hint);
         box.setAlignment(Pos.CENTER);

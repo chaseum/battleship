@@ -1,198 +1,86 @@
-# Neo-Retro Battleship
-# A fully modern Battleship experience featuring a custom Java engine, AI opponents,
-# online play, a retro-styled GUI, animations, and an original soundtrack.
+<p align="center">
+  <img src="https://img.shields.io/badge/Neo--Retro%20Battleship-v1.0.0-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Java-17%2B-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Build-Maven-0d96f6?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/GUI-JavaFX-1abc9c?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Status-First%20Release-success?style=for-the-badge" />
+</p>
 
-# ------------------------------------------------------------------------------
+# Neo-Retro Battleship
+A modern Battleship experience featuring a custom Java engine, AI opponents, online multiplayer, a retro-styled JavaFX GUI, and early-stage animations.
+
+> **Note:** This release includes **fully working gameplay and GUI**, but **visual assets are not final** and **no music or SFX** are included yet.
+
+---
 
 # Overview
-#
-# Neo-Retro Battleship is a from-scratch reimagining of the classic Battleship game,
-# built around a modular, extensible Java engine. The project supports Classic and
-# Neo-Retro modes, offers a polished JavaFX GUI with pixel-art visuals, includes a
-# retro soundtrack, and provides online multiplayer via a custom rendezvous server.
-#
-# The system is designed to be maintainable, testable, and easily expandable—with
-# a clean separation between the engine, AI, networking layer, and UI.
-#
-# This game demonstrates full-stack game engineering in Java—from deterministic turn
-# resolution to real-time UI/UX, network synchronization, AI agents, and visual/audio design.
 
-# ------------------------------------------------------------------------------
+Neo-Retro Battleship is a from-scratch reimagining of the classic Battleship experience, built on a fully modular Java engine.
+
+The project supports:
+- Classic and Neo-Retro modes
+- Complete GUI (JavaFX) with pixel-art style visuals
+- Early animation system (semi-finished)
+- Local multiplayer
+- Online multiplayer via a custom rendezvous server
+- CLI mode for full terminal play
+
+---
 
 # Key Features
 
-# Classic Mode
-# - Standard Battleship rules
-# - Turn-based firing
-# - Hidden enemy board
-# - Victory when all enemy ships are sunk
+### Classic Mode
+- Standard rules
+- Turn-based firing
+- Hidden enemy board
+- Win when all ships are sunk
 
-# Neo-Retro Mode
-# Abilities with cooldowns, charges, animations, and SFX:
-# - EMP — disables opponent abilities
-# - Shield — protects a tile for multiple turns
-# - Multishot — fires multiple coordinated shots
-# - Sonar — scans a 3×3 region for ships
+### Neo-Retro Mode
+Abilities with cooldowns:
+- EMP
+- Shield
+- Multishot
+- Sonar
 
-# ------------------------------------------------------------------------------
+---
 
 # Project Structure
 
-# src/main/java/com/chase/battleship/
-# ├── core/        # Engine, rules, abilities, turn system
-# ├── ai/          # DecisionTreeAI, heuristics
-# ├── net/         # Rendezvous server/client protocol
-# ├── cli/         # Terminal mode
-# └── gui/         # JavaFX UI, screens, animations, sound
+src/main/java/com/chase/battleship/
+├── core/
+├── ai/
+├── net/
+├── cli/
+└── gui/
 
-# Core Module
-# - Turn system & phases
-# - Ship placement & board model
-# - Hit/miss/shield/sunk logic
-# - Ability rule resolution
-# - Deterministic AI- and network-safe state transitions
-
-# AI Module
-# - Hunt/target logic
-# - Probability-based move selection
-# - Ability-use heuristics
-
-# Networking Module
-# - Join-code matchmaking
-# - Host/Join workflow
-# - Turn synchronization
-# - Disconnection handling
-
-# GUI Module (JavaFX)
-# - Retro pixel-art grid
-# - Responsive layout (fullscreen & windowed)
-# - Animations: hits, misses, sonar pulse, shield glow, EMP flash
-# - Retro synth soundtrack + SFX
-# - Crosshair cursor
-# - Keyboard + mouse controls
-
-# ------------------------------------------------------------------------------
-
-# Screens & User Flow
-#
-# - Title Screen
-# - Single / Multiplayer Selection
-# - Mode Selection
-# - Host Lobby / Join Code Screen
-# - Setup Screen (Auto / Manual)
-# - Playing Screen (turns, abilities, animations)
-# - Win / Lose Screen
-
-# All screens:
-# - Support Back navigation
-# - Show in-game labels instead of OS pop-ups
-# - Provide animated transitions
-# - Use a retro UI theme
-
-# ------------------------------------------------------------------------------
-
-# Installation & Requirements
-#
-# - Java 17+
-# - Maven (recommended)
-# - JavaFX installed locally
-# - Rendezvous server required for online multiplayer
-#
-# Example Maven:
-#   mvn clean package
-
-# ------------------------------------------------------------------------------
+---
 
 # Running the Game
 
-# GUI:
-# java --module-path /path/to/javafx-sdk/lib \
-#      --add-modules javafx.controls,javafx.fxml \
-#      -cp target/classes com.chase.battleship.gui.GameApp
+GUI:
+java --module-path /path/to/javafx-sdk/lib --add-modules javafx.controls,javafx.fxml -cp target/classes com.chase.battleship.gui.GameApp
 
-# Rendezvous Server:
-# java -cp target/classes com.chase.battleship.net.RendezvousServer
+Rendezvous Server:
+java -cp target/classes com.chase.battleship.net.RendezvousServer
 
-# ------------------------------------------------------------------------------
+---
 
-# Online Multiplayer Instructions
+# Roadmap
 
-# Hosting:
-# - Select "Host Game"
-# - Receive a lobby code
-# - Share the code
+Completed:
+- Engine
+- AI
+- Abilities
+- GUI
+- Networking
 
-# Joining:
-# - Select "Join Game"
-# - Enter the lobby code
-# - Automatically transition into the game
+Planned:
+- Final assets
+- Audio
+- Replay viewer
+- Ranked matchmaking
 
-# During play:
-# - Turns alternate with built-in delays
-# - Disconnections display a UI overlay and return the player to the Title Screen
-
-# ------------------------------------------------------------------------------
-
-# GUI Visuals & Effects
-
-# Hit / Miss:
-# - Pixel splash animations
-# - Floating text labels
-# - Tile overlays
-
-# Ability SFX & VFX:
-# - EMP: bright neon pulse with screen flash
-# - Sonar: radial scanning ring effect
-# - Shield: shimmering hex tile
-# - Multishot: sequential rapid impacts
-
-# Audio:
-# - Synthwave background music
-# - SFX for moves, abilities, transitions, and wins
-
-# ------------------------------------------------------------------------------
-
-# Roadmap & Completed Work
-
-# Completed:
-# - Java engine (core)
-# - AI opponent
-# - Abilities system
-# - Local multiplayer
-# - Online matchmaking
-# - JavaFX GUI
-# - Animations + sound design
-# - Full retro styling
-# - Input system (keyboard + mouse)
-# - Turn sequencing with delays
-
-# Planned:
-# - Replay viewer
-# - Ranked matchmaking
-# - Additional skins & themes
-# - Colorblind mode
-# - Expanded ability suite
-
-# ------------------------------------------------------------------------------
-
-# Why This Project Matters
-
-# The project demonstrates:
-# - Modular software architecture
-# - Deterministic gameplay engine
-# - AI decision-making
-# - JavaFX UI engineering
-# - Networked multiplayer systems
-# - Visual/audio asset integration
-# - Clean separation of concerns
-
-# Ideal for:
-# - Game dev portfolios
-# - Software engineering resumes
-# - Demonstrating Java proficiency
-# - Showcasing full-stack game architecture
-
-# ------------------------------------------------------------------------------
+---
 
 # License
-# MIT License
+MIT License

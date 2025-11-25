@@ -191,15 +191,9 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 			return new AbilityResult("Sonar failed: no center coordinate specified.");
 		}
 
-		Board tracking = user.getTrackingBoard();
-		CellState centerState = tracking.getCellState(center);
-		if (centerState == CellState.HIT || centerState == CellState.MISS) {
-			return new AbilityResult("Sonar failed: target already revealed. Choose another cell.");
-		}
-
-		Board enemyBoard = opponent.getOwnBoard();
-		int radius = 1; // 3x3
-		List<Coordinate> hits = new ArrayList<>();
+        Board enemyBoard = opponent.getOwnBoard();
+        int radius = 1; // 3x3
+        List<Coordinate> hits = new ArrayList<>();
 
 		for(int dr = -radius; dr <= radius; dr++) {
 			for(int dc = -radius; dc <= radius; dc++) {
@@ -212,14 +206,11 @@ public class DefaultAbilityExecutor implements AbilityExecutor {
 
 				Coordinate c = new Coordinate(nr,nc);
 
-				if(enemyBoard.findShipAt(c).isPresent()) {
-					hits.add(c);
-					if (tracking.getCellState(c) == CellState.EMPTY) {
-						tracking.markSeen(c, CellState.HIT);
-					}
-				}
-			}
-		}
+                if(enemyBoard.findShipAt(c).isPresent()) {
+                    hits.add(c);
+                }
+            }
+        }
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format(
 			"Sonar scan at (%d,%d) detected %d ship segment(s) in the 3x3 area: ",

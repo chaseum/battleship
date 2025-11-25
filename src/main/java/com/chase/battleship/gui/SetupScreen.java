@@ -20,6 +20,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.util.Duration;
 
 public class SetupScreen extends BaseScreen {
 
@@ -39,6 +40,7 @@ public class SetupScreen extends BaseScreen {
     private final Button autoBtn;
     private final Button readyBtn;
     private final VBox shipPalette;
+    private final VBox paletteWrapper;
     private final java.util.Set<Coordinate> previewCells = new java.util.HashSet<>();
     private boolean previewValid = false;
     private int previewAnchorRow = -1;
@@ -61,6 +63,12 @@ public class SetupScreen extends BaseScreen {
 
         subtitleLabel = new Label("");
         subtitleLabel.setStyle("-fx-text-fill: #cccccc; -fx-font-size: 14px;");
+        subtitleLabel.setMinWidth(960);
+        subtitleLabel.setPrefWidth(1040);
+        subtitleLabel.setMaxWidth(1200);
+        subtitleLabel.setWrapText(false);
+        subtitleLabel.setAlignment(Pos.CENTER);
+        subtitleLabel.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
 
         VBox titleBox = new VBox(6, titleLabel, subtitleLabel);
         titleBox.setAlignment(Pos.CENTER);
@@ -83,14 +91,17 @@ public class SetupScreen extends BaseScreen {
         shipPalette.setPadding(new Insets(0, 10, 0, 10));
         rebuildShipPalette();
 
-        VBox paletteWrapper = new VBox(shipPalette);
+        paletteWrapper = new VBox(shipPalette);
         paletteWrapper.setAlignment(Pos.CENTER);
         paletteWrapper.setMinWidth(CELL_SIZE * 4);
         paletteWrapper.setMinHeight(CELL_SIZE * 12);
         paletteWrapper.setPadding(new Insets(0, 10, 0, 0));
+        paletteWrapper.minHeightProperty().bind(gridWithLabels.heightProperty());
+        paletteWrapper.prefHeightProperty().bind(gridWithLabels.heightProperty());
 
-        HBox centerBox = new HBox(32, paletteWrapper, gridWithLabels);
+        HBox centerBox = new HBox(24, paletteWrapper, gridWithLabels);
         centerBox.setAlignment(Pos.CENTER); // center the grid and palette together
+        HBox.setHgrow(gridWithLabels, Priority.NEVER);
         root.setCenter(centerBox);
 
         // bottom controls
@@ -381,6 +392,7 @@ public class SetupScreen extends BaseScreen {
     private void rebuildShipPalette() {
         shipPalette.getChildren().clear();
         Label header = new Label("Ships");
+        header.setTextFill(Color.WHITE);
         shipPalette.getChildren().add(header);
         Board board = getCurrentPlacementBoard();
         if (board == null) return;
@@ -398,7 +410,7 @@ public class SetupScreen extends BaseScreen {
             ImageView icon = new ImageView(AssetLibrary.shipIcon(type));
             icon.setPreserveRatio(true);
             icon.setSmooth(false);
-            icon.setFitHeight(28);
+            icon.setFitHeight(CELL_SIZE * 0.9);
 
             StackPane artCard = new StackPane(icon);
             artCard.setPadding(new Insets(8));
@@ -417,9 +429,15 @@ public class SetupScreen extends BaseScreen {
         }
 
         if (shipPalette.getChildren().size() == 1) {
-            shipPalette.getChildren().add(new Label("All ships placed"));
+            Label done = new Label("All ships placed");
+            done.setTextFill(Color.WHITE);
+            shipPalette.getChildren().add(done);
         }
         highlightSelection(null);
+
+        boolean allPlaced = placed.size() == ShipType.values().length;
+        paletteWrapper.setManaged(!allPlaced);
+        paletteWrapper.setVisible(!allPlaced);
     }
 
     private GridPane wrapWithLabels(Node boardNode) {
@@ -531,7 +549,6 @@ public class SetupScreen extends BaseScreen {
     }
 
     private void updateSubtitle(String text) {
-        subtitleLabel.setText(text);
-        FxAnimations.marqueeIfNeeded(subtitleLabel, 360);
+        FxAnimations.typewriter(subtitleLabel, text, Duration.millis(1200));
     }
 }

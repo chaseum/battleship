@@ -27,16 +27,17 @@ public class TitleScreen extends BaseScreen {
                 new RetroMenu.Option("Controls", () -> screenManager.show(ScreenId.CONTROLS)),
                 new RetroMenu.Option("Quit", Platform::exit)
         ));
+        menu.setStyle("-fx-font-size: 26px;");
 
         Label hint = new Label("Arrow keys / Enter or mouse. Esc for settings.");
-        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 10px; -fx-font-family: 'Press Start 2P';");
+        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 9px; -fx-font-family: 'Press Start 2P';");
 
-        VBox menuBox = new VBox(18, menu);
-        menuBox.setAlignment(Pos.TOP_LEFT);
-        menuBox.setPadding(new javafx.geometry.Insets(120, 0, 0, 60));
+        VBox menuBox = new VBox(22, menu);
+        menuBox.setAlignment(Pos.CENTER_LEFT);
+        menuBox.setPadding(new javafx.geometry.Insets(0, 0, 0, 40));
 
         StackPane titlePane = new StackPane(title);
-        titlePane.setPadding(new javafx.geometry.Insets(60, 0, 0, 0));
+        titlePane.setPadding(new javafx.geometry.Insets(40, 0, 0, 0));
         titlePane.setAlignment(Pos.TOP_CENTER);
 
         StackPane hintPane = new StackPane(hint);

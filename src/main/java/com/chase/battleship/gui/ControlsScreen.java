@@ -69,10 +69,15 @@ public class ControlsScreen extends BaseScreen {
         arrows.setAlignment(Pos.CENTER);
         arrows.setPadding(new Insets(10));
 
+        Region demo = new Region();
+        demo.setPrefSize(360, 220);
+        demo.setMinSize(320, 180);
+        demo.setStyle("-fx-background-color: rgba(255,255,255,0.04); -fx-border-color: rgba(140,220,255,0.4); -fx-border-width: 1; -fx-border-radius: 8; -fx-background-radius: 8;");
+
         Label hint = new Label("Left/Right or A/D to browse. Esc to go back.");
         hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 11px;");
 
-        VBox center = new VBox(12, header, arrows, hint);
+        VBox center = new VBox(12, header, arrows, demo, hint);
         center.setAlignment(Pos.CENTER);
 
         root = new BorderPane(center);

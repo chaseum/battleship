@@ -2,6 +2,7 @@ package com.chase.battleship.gui;
 
 import com.chase.battleship.core.*;
 import javafx.animation.*;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,6 +21,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PlayingScreen extends BaseScreen {
 
@@ -38,10 +41,12 @@ public class PlayingScreen extends BaseScreen {
     private final Pane myEffectOverlay;
     private final Pane enemyEffectOverlay;
     private final javafx.scene.shape.Rectangle enemyHoverRect = new javafx.scene.shape.Rectangle();
+    private final javafx.scene.shape.Rectangle enemySelectRect = new javafx.scene.shape.Rectangle();
     private final StackPane myBoardStack;
     private final Label turnLabel;
     private final ImageView turnAvatar;
     private final Label actionLabel;
+    private final Label fireHint;
     private final VBox bottomBox;
     private final Label messageLabel;
     private final HBox hotbar;
@@ -56,6 +61,7 @@ public class PlayingScreen extends BaseScreen {
     private final java.util.Map<Coordinate, CellState> lastMyBoardStates = new java.util.HashMap<>();
     private final java.util.Map<Coordinate, CellState> lastEnemySeenStates = new java.util.HashMap<>();
     private final java.util.Set<String> sunkMyShipsShown = new java.util.HashSet<>();
+    private PauseTransition actionClear;
 
     private Button sonarBtn;
     private Button multiBtn;
@@ -67,6 +73,7 @@ public class PlayingScreen extends BaseScreen {
     private PlayerState lastTurnOwner = null;
     private boolean isLocalTwoP = false;
     private TurnAction lastAnimatedAction = null;
+    private Coordinate pendingFireTarget = null;
 
     public PlayingScreen(ScreenManager manager) {
         super(manager);
@@ -76,7 +83,7 @@ public class PlayingScreen extends BaseScreen {
         root.setPadding(new Insets(20));
 
         turnLabel = new Label("Your turn");
-        turnLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 20px;");
+        turnLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 22px;");
 
         turnAvatar = new ImageView(AssetLibrary.playerOne());
         turnAvatar.setFitHeight(34);
@@ -86,10 +93,18 @@ public class PlayingScreen extends BaseScreen {
         turnAvatar.setEffect(new DropShadow(8, Color.web("#061826")));
 
         actionLabel = new Label("");
-        actionLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 16px;");
+        actionLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 17px;");
+        actionLabel.setWrapText(false);
+        actionLabel.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
+        actionLabel.setMinWidth(0);
+        actionLabel.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        actionLabel.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(actionLabel, Priority.ALWAYS);
 
-        HBox topBar = new HBox(14, turnAvatar, turnLabel, actionLabel);
-        topBar.setAlignment(Pos.TOP_LEFT);
+        HBox topBar = new HBox(16, turnAvatar, turnLabel, actionLabel);
+        topBar.setAlignment(Pos.CENTER_LEFT);
+        topBar.setFillHeight(true);
+        topBar.setMaxWidth(Double.MAX_VALUE);
         root.setTop(topBar);
 
         myGrid = createBoardGrid(false);
@@ -103,8 +118,15 @@ public class PlayingScreen extends BaseScreen {
         myEffectOverlay.setPrefSize(boardPixels, boardPixels);
         enemyHoverRect.setVisible(false);
         enemyHoverRect.setMouseTransparent(true);
-        enemyHoverRect.setArcWidth(6);
-        enemyHoverRect.setArcHeight(6);
+        enemyHoverRect.setArcWidth(2);
+        enemyHoverRect.setArcHeight(2);
+        enemySelectRect.setVisible(false);
+        enemySelectRect.setMouseTransparent(true);
+        enemySelectRect.setArcWidth(2);
+        enemySelectRect.setArcHeight(2);
+        enemySelectRect.setStroke(Color.web("#8ae8ff"));
+        enemySelectRect.setFill(Color.color(0.7, 1.0, 0.7, 0.35));
+        enemySelectRect.setStrokeWidth(1.6);
         myBoardStack = new StackPane(myGrid, myEffectOverlay, myShipOverlay);
         myBoardStack.setPickOnBounds(false);
         enemyGrid = createBoardGrid(true);
@@ -112,7 +134,7 @@ public class PlayingScreen extends BaseScreen {
         enemyEffectOverlay.setMouseTransparent(true);
         enemyEffectOverlay.setPickOnBounds(false);
         enemyEffectOverlay.setPrefSize(boardPixels, boardPixels);
-        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyHoverRect, enemyEffectOverlay);
+        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyHoverRect, enemySelectRect, enemyEffectOverlay);
         enemyBoardStack.setPickOnBounds(false);
 
         Label myLabel = new Label("Your Sea");
@@ -144,11 +166,23 @@ public class PlayingScreen extends BaseScreen {
         messageLabel.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 14px;");
         messageLabel.setMaxWidth(520);
         messageLabel.setMinHeight(22);
+        messageLabel.setManaged(false);
+        messageLabel.setVisible(false);
 
         hotbar = new HBox(10);
         hotbar.setAlignment(Pos.CENTER);
 
-        bottomBox = new VBox(10, hotbar);
+        fireHint = new Label("Click again to fire");
+        fireHint.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 12px;");
+        fireHint.setVisible(false);
+        FadeTransition hintPulse = new FadeTransition(Duration.millis(900), fireHint);
+        hintPulse.setFromValue(1.0);
+        hintPulse.setToValue(0.4);
+        hintPulse.setCycleCount(Animation.INDEFINITE);
+        hintPulse.setAutoReverse(true);
+        hintPulse.play();
+
+        bottomBox = new VBox(10, hotbar, fireHint);
         bottomBox.setAlignment(Pos.CENTER);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
 
@@ -254,6 +288,8 @@ public class PlayingScreen extends BaseScreen {
         myEffectOverlay.getChildren().clear();
         enemyEffectOverlay.getChildren().clear();
         lastAnimatedAction = null;
+        pendingFireTarget = null;
+        enemySelectRect.setVisible(false);
         session = manager.getCurrentSession();
         if (session == null) {
             turnLabel.setText("No active game");
@@ -328,8 +364,19 @@ public class PlayingScreen extends BaseScreen {
             return;
         }
 
-        TurnAction action = new FireAction(new Coordinate(row, col));
-        performHumanTurn(action);
+        Coordinate target = new Coordinate(row, col);
+        if (pendingFireTarget != null && pendingFireTarget.equals(target)) {
+            pendingFireTarget = null;
+            enemySelectRect.setVisible(false);
+            fireHint.setVisible(false);
+            TurnAction action = new FireAction(target);
+            performHumanTurn(action);
+        } else {
+            pendingFireTarget = target;
+            showEnemySelection(target);
+            fireHint.setVisible(true);
+            updateMessages("Target " + (row + 1) + "," + (char)('A' + col), null);
+        }
     }
 
     private void performHumanTurn(TurnAction action) {
@@ -345,7 +392,7 @@ public class PlayingScreen extends BaseScreen {
         }
         if (res != null) {
             actionLabel.setTextFill(Color.web("#f0f0f0"));
-            updateMessages("You: " + res.message(), simplifyMessage(res.message()));
+            updateMessages(formatActionMessage(action, res, true), null);
         }
         maybeHighlightSonar(action, res == null ? null : res.message());
         syncFromState();
@@ -387,7 +434,9 @@ public class PlayingScreen extends BaseScreen {
             }
             if (autoRes != null) {
                 actionLabel.setTextFill(Color.web("#f0f0f0"));
-                updateMessages(autoRes.message(), simplifyMessage(autoRes.message()));
+                TurnAction autoAction = session.getLastAction();
+                boolean byLocal = session.wasLastActionByLocal();
+                updateMessages(formatActionMessage(autoAction, autoRes, byLocal), null);
             }
             isProcessing = false;
             syncFromState();
@@ -408,7 +457,12 @@ public class PlayingScreen extends BaseScreen {
         boolean turnChanged = isLocalTwoP && current != lastTurnOwner && !gs.isGameOver();
         if (turnChanged && !waitingForHandOff) {
             showHandOffOverlay(current);
+            actionLabel.setText("");
+            pendingFireTarget = null;
+            enemySelectRect.setVisible(false);
+            fireHint.setVisible(false);
         }
+        lastTurnOwner = current;
 
         PlayerState me;
         PlayerState enemy;
@@ -750,14 +804,123 @@ public class PlayingScreen extends BaseScreen {
         manager.show(ScreenId.DISCONNECTED);
     }
 
+    private String formatActionMessage(TurnAction action, TurnResult res, boolean byLocalActor) {
+        String resMsg = res != null ? res.message() : "";
+        String actor = byLocalActor ? "You" : "Opponent";
+        if (action instanceof FireAction fire) {
+            String outcome = parseOutcome(resMsg);
+            return actor + " fired at " + coordLabel(fire.target()) + (outcome != null ? ": " + outcome : "");
+        }
+        if (action instanceof UseAbilityAction use) {
+            return switch (use.abilityType()) {
+                case MULTISHOT -> formatMultishotMessage(resMsg, actor);
+                case EMP -> actor + " used EMP: enemy abilities disabled for 2 turns.";
+                case SONAR -> formatSonarMessage(resMsg, actor);
+                case SHIELD -> formatShieldMessage(resMsg, actor);
+            };
+        }
+        return (actor + ": " + resMsg).trim();
+    }
+
+    private String formatMultishotMessage(String resMsg, String actor) {
+        Pattern p = Pattern.compile("fired\\s+(\\d+)\\D+hits=(\\d+)(?:,\\s*ships sunk=(\\d+))?", Pattern.CASE_INSENSITIVE);
+        Matcher m = resMsg != null ? p.matcher(resMsg) : null;
+        if (m != null && m.find()) {
+            int shots = safeInt(m.group(1));
+            int hits = safeInt(m.group(2));
+            int sunk = m.group(3) != null ? safeInt(m.group(3)) : 0;
+            int misses = shots >= 0 && hits >= 0 ? Math.max(0, shots - hits) : 0;
+            StringBuilder sb = new StringBuilder(actor + " used Multishot: ");
+            if (shots > 0) {
+                sb.append(shots).append(" shots (").append(hits).append(" hit, ").append(misses).append(" miss");
+                if (misses != 1) sb.append("es");
+                sb.append(")");
+            } else {
+                sb.append(resMsg);
+            }
+            if (sunk > 0) {
+                sb.append(", sank ").append(sunk).append(sunk == 1 ? " ship" : " ships");
+            }
+            return sb.toString();
+        }
+        return actor + " used Multishot" + (resMsg == null || resMsg.isBlank() ? "" : (": " + resMsg));
+    }
+
+    private String formatSonarMessage(String resMsg, String actor) {
+        int row = -1, col = -1, hits = -1;
+        Pattern centerPat = Pattern.compile("Sonar scan at \\((\\d+),(\\d+)\\)", Pattern.CASE_INSENSITIVE);
+        Pattern hitsPat = Pattern.compile("detected\\s+(\\d+)\\s+ship", Pattern.CASE_INSENSITIVE);
+        if (resMsg != null) {
+            Matcher c = centerPat.matcher(resMsg);
+            if (c.find()) {
+                row = safeInt(c.group(1));
+                col = safeInt(c.group(2));
+            }
+            Matcher h = hitsPat.matcher(resMsg);
+            if (h.find()) {
+                hits = safeInt(h.group(1));
+            } else if (resMsg.toLowerCase().contains("no ship segments")) {
+                hits = 0;
+            }
+        }
+        StringBuilder sb = new StringBuilder(actor + " used Sonar");
+        if (row >= 0 && col >= 0) {
+            sb.append(" at ").append(coordLabel(new Coordinate(row, col)));
+        }
+        if (hits >= 0) {
+            sb.append(": detected ").append(hits).append(hits == 1 ? " segment" : " segments");
+        } else if (resMsg != null && !resMsg.isBlank()) {
+            sb.append(": ").append(resMsg);
+        }
+        return sb.toString();
+    }
+
+    private String formatShieldMessage(String resMsg, String actor) {
+        if (resMsg == null) return actor + " used Shield";
+        Pattern p = Pattern.compile("Shield applied to\\s+(\\w+)\\s+at\\s+(\\d+),(\\d+)", Pattern.CASE_INSENSITIVE);
+        Matcher m = p.matcher(resMsg);
+        if (m.find()) {
+            String ship = m.group(1);
+            int r = safeInt(m.group(2));
+            int c = safeInt(m.group(3));
+            return actor + " used Shield on " + ship + " at " + coordLabel(new Coordinate(r, c));
+        }
+        return actor + " used Shield: " + resMsg;
+    }
+
+    private String parseOutcome(String resMsg) {
+        if (resMsg == null) return null;
+        Matcher m = Pattern.compile("=>\\s*([^\\n]+)").matcher(resMsg);
+        return m.find() ? m.group(1).trim() : resMsg;
+    }
+
+    private String coordLabel(Coordinate coord) {
+        char colLetter = (char) ('A' + coord.col());
+        return colLetter + String.valueOf(coord.row() + 1);
+    }
+
+    private int safeInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (Exception ex) {
+            return -1;
+        }
+    }
+
     private void updateMessages(String actionText, String simpleText) {
         if (actionText != null) {
-            actionLabel.setText(actionText);
-            FxAnimations.marqueeIfNeeded(actionLabel, 480);
-        }
-        if (simpleText != null) {
-            messageLabel.setText(simpleText);
-            FxAnimations.marqueeIfNeeded(messageLabel, 480);
+            if (actionClear != null) {
+                actionClear.stop();
+            }
+            FxAnimations.stopMarquee(actionLabel);
+            FxAnimations.typewriter(actionLabel, actionText, Duration.millis(1400));
+            actionClear = new PauseTransition(Duration.seconds(6));
+            actionClear.setOnFinished(e -> actionLabel.setText(""));
+            actionClear.playFromStart();
+            Platform.runLater(() -> {
+                double visibleWidth = actionLabel.getWidth() > 0 ? actionLabel.getWidth() : 900;
+                FxAnimations.marqueeIfNeeded(actionLabel, visibleWidth);
+            });
         }
     }
 
@@ -818,8 +981,8 @@ public class PlayingScreen extends BaseScreen {
 
     private void showEnemyHover(int row, int col) {
         updateEnemyHoverState(row, col);
-        enemyHoverRect.setWidth(CELL_SIZE + enemyGrid.getHgap());
-        enemyHoverRect.setHeight(CELL_SIZE + enemyGrid.getVgap());
+        enemyHoverRect.setWidth(CELL_SIZE);
+        enemyHoverRect.setHeight(CELL_SIZE);
     }
 
     private void clearEnemyHover() {
@@ -842,8 +1005,19 @@ public class PlayingScreen extends BaseScreen {
         enemyHoverRect.setHeight(CELL_SIZE);
         enemyHoverRect.setLayoutX(col * stepX);
         enemyHoverRect.setLayoutY(row * stepY);
-        enemyHoverRect.setFill(canFire ? Color.color(0.7, 0.9, 1.0, 0.3) : Color.color(1.0, 0.3, 0.3, 0.3));
+        enemyHoverRect.setFill(canFire ? Color.color(0.7, 1.0, 0.7, 0.35) : Color.color(1.0, 0.3, 0.3, 0.28));
         enemyHoverRect.setVisible(true);
+    }
+
+    private void showEnemySelection(Coordinate coord) {
+        double stepX = CELL_SIZE + enemyGrid.getHgap();
+        double stepY = CELL_SIZE + enemyGrid.getVgap();
+        enemySelectRect.setWidth(CELL_SIZE);
+        enemySelectRect.setHeight(CELL_SIZE);
+        enemySelectRect.setLayoutX(coord.col() * stepX);
+        enemySelectRect.setLayoutY(coord.row() * stepY);
+        enemySelectRect.setOpacity(0.85);
+        enemySelectRect.setVisible(true);
     }
 
     private void refreshFleetPanel(PlayerState me) {
@@ -870,7 +1044,8 @@ public class PlayingScreen extends BaseScreen {
             ImageView art = new ImageView(AssetLibrary.shipIcon(type));
             art.setPreserveRatio(true);
             art.setSmooth(false);
-            art.setFitHeight(CELL_SIZE * 1.1);
+            art.setFitHeight(CELL_SIZE * 0.9);
+            art.setFitWidth(CELL_SIZE * type.getLength());
             art.setOpacity(sunk ? 0.32 : (damageRatio > 0 ? 0.82 : 1.0));
             art.setEffect(new DropShadow(8, Color.web("#061826")));
 
@@ -880,10 +1055,12 @@ public class PlayingScreen extends BaseScreen {
 
             Label name = new Label(type.name());
             name.setTextFill(Color.web("#e6f4ff"));
-            name.setStyle("-fx-font-size: 12px;");
+            name.setStyle("-fx-font-size: 10px;");
             Label status = new Label(sunk ? "SUNK" : (damageRatio > 0 ? "HIT" : "READY"));
             status.setTextFill(sunk ? Color.web("#ff8fa0") : (damageRatio > 0 ? Color.web("#ffe599") : Color.web("#9ff7ff")));
-            status.setStyle("-fx-font-size: 11px;");
+            status.setStyle("-fx-font-size: 9px;");
+            status.setWrapText(true);
+            status.setMaxWidth(CELL_SIZE * 2.0);
 
             VBox textCol = new VBox(2, name, status);
             HBox row = new HBox(10, artCard, textCol);
@@ -1143,6 +1320,9 @@ public class PlayingScreen extends BaseScreen {
 
     private void animateSonar(Coordinate center, boolean byLocalPlayer) {
         Coordinate c = center != null ? center : new Coordinate(4, 4);
+        if (c.row() < 0 || c.col() < 0 || c.row() >= 10 || c.col() >= 10) {
+            return;
+        }
         java.util.List<Coordinate> centerOnly = java.util.List.of(c);
         java.util.List<Coordinate> ring = new java.util.ArrayList<>();
         for (int dr = -1; dr <= 1; dr++) {
