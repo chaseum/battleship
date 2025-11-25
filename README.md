@@ -57,10 +57,16 @@ src/main/java/com/chase/battleship/
 
 # Running the Game
 
-GUI:
-java --module-path /path/to/javafx-sdk/lib --add-modules javafx.controls,javafx.fxml -cp target/classes com.chase.battleship.gui.GameApp
+### Build (Recommended)
+mvn clean compile
 
-Rendezvous Server:
+### Run the GUI
+mvn javafx:run
+
+### Run the CLI
+java -cp target/classes com.chase.battleship.cli.BattleshipCli
+
+### Start the Rendezvous Server (required for online multiplayer)
 java -cp target/classes com.chase.battleship.net.RendezvousServer
 
 ---
