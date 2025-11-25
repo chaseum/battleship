@@ -80,7 +80,7 @@ Planned:
 - Replay viewer
 - Ranked matchmaking
 
----
+--
 
 # License
 MIT License
