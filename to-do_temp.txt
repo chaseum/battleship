@@ -1,0 +1,15 @@
+
+# general
+- text "your turn" & "fired at" is misaligned
+- fleet icons aren't sized properly according to tile size on grid (submarine is largest and carrier is smallest)
+- submarine text is overlapping
+
+# controls screen
+- carousel is good, but needs space in the middle to fit either a gif or generate a sample "turn" that performs the ability listed
+
+# playing screen
+- hovering over grid square doesn't change the color to indicate if that's the place to fire
+- possible feature: for normal firing (player only) implement a 2 step firing process (select square -> ready)
+
+# text
+- "arrow keys / enter or mouse / ..." is too big and is in the wrong place (needs to be less disruptive to screen)
