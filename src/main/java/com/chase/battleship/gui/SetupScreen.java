@@ -21,6 +21,7 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import java.util.ArrayList;
 
 public class SetupScreen extends BaseScreen {
 
@@ -39,6 +40,7 @@ public class SetupScreen extends BaseScreen {
     private final Label subtitleLabel;
     private final Button autoBtn;
     private final Button readyBtn;
+    private final Label readyHint;
     private final VBox shipPalette;
     private final VBox paletteWrapper;
     private final java.util.Set<Coordinate> previewCells = new java.util.HashSet<>();
@@ -110,6 +112,9 @@ public class SetupScreen extends BaseScreen {
         Button resetBtn = new Button("Reset");
         readyBtn = new Button("Ready");
         Button backBtn = new Button("Back");
+        readyHint = new Label("");
+        readyHint.setTextFill(Color.web("#9ff7ff"));
+        readyHint.setVisible(false);
 
         autoBtn.setOnAction(e -> autoSetup());
         rotateBtn.setOnAction(e -> toggleOrientation());
@@ -126,7 +131,10 @@ public class SetupScreen extends BaseScreen {
         HBox bottomBar = new HBox(15, autoBtn, rotateBtn, resetBtn, readyBtn, backBtn);
         bottomBar.setAlignment(Pos.CENTER);
         bottomBar.setPadding(new Insets(10, 0, 0, 0));
-        root.setBottom(bottomBar);
+
+        VBox bottomWrapper = new VBox(6, readyHint, bottomBar);
+        bottomWrapper.setAlignment(Pos.CENTER);
+        root.setBottom(bottomWrapper);
 
         root.setOnKeyPressed(e -> {
             if (e.getCode() == javafx.scene.input.KeyCode.R) {
@@ -283,12 +291,47 @@ public class SetupScreen extends BaseScreen {
             }
         }
         renderShipOverlay(board);
+        updateReadyState();
     }
 
     private void handleCellClick(int row, int col) {
-        if (session == null || selectedShip == null) return;
+        if (session == null) return;
         Board board = getCurrentPlacementBoard();
         Coordinate start = new Coordinate(row, col);
+
+        // Allow picking up an existing ship to reposition it
+        if (selectedShip == null) {
+            var maybeShip = board.findShipAt(start);
+            if (maybeShip.isEmpty()) {
+                return;
+            }
+            Ship ship = maybeShip.get();
+
+            java.util.List<Ship> existing = new java.util.ArrayList<>(board.getShips());
+            board.reset();
+            for (Ship s : existing) {
+                if (s == ship) continue;
+                java.util.List<Coordinate> coords = s.getCoordinates();
+                if (coords.isEmpty()) continue;
+                boolean horiz = coords.size() < 2 || coords.get(0).row() == coords.get(1).row();
+                int minRow = coords.stream().mapToInt(Coordinate::row).min().orElse(0);
+                int minCol = coords.stream().mapToInt(Coordinate::col).min().orElse(0);
+                Ship copy = new Ship(s.getType());
+                board.placeShip(copy, new Coordinate(minRow, minCol), horiz);
+            }
+
+            java.util.List<Coordinate> coords = ship.getCoordinates();
+            boolean horiz = coords.size() < 2 || coords.get(0).row() == coords.get(1).row();
+            selectedShip = ship.getType();
+            placeHorizontal = horiz;
+            updateSubtitle("Picked up " + selectedShip + ". Choose a new spot.");
+            rebuildShipPalette();
+            refreshBoardView();
+            clearPreview();
+            updateReadyState();
+            return;
+        }
+
         if (!board.canPlaceShip(selectedShip, start, placeHorizontal)) {
             updateSubtitle("Cannot place " + selectedShip + " here.");
             return;
@@ -337,12 +380,13 @@ public class SetupScreen extends BaseScreen {
             view.setPreserveRatio(true);
 
             int len = ship.getType().getLength();
+            double scale = 0.80 + (0.05 * len);
             if (horizontal) {
-                view.setFitHeight(CELL_SIZE);
-                view.setFitWidth(len * CELL_SIZE + boardGrid.getHgap() * (len - 1));
+                view.setFitHeight(CELL_SIZE * scale);
+                view.setFitWidth(len * CELL_SIZE * scale + boardGrid.getHgap() * (len - 1));
             } else {
-                view.setFitWidth(CELL_SIZE);
-                view.setFitHeight(len * CELL_SIZE + boardGrid.getVgap() * (len - 1));
+                view.setFitWidth(CELL_SIZE * scale);
+                view.setFitHeight(len * CELL_SIZE * scale + boardGrid.getVgap() * (len - 1));
             }
 
             long hits = coords.stream()
@@ -374,6 +418,9 @@ public class SetupScreen extends BaseScreen {
     private void toggleOrientation() {
         placeHorizontal = !placeHorizontal;
         updateSubtitle("Orientation: " + (placeHorizontal ? "Horizontal" : "Vertical"));
+        if (previewAnchorRow >= 0 && previewAnchorCol >= 0 && selectedShip != null) {
+            showPreview(previewAnchorRow, previewAnchorCol);
+        }
     }
 
     private void resetManual() {
@@ -550,5 +597,17 @@ public class SetupScreen extends BaseScreen {
 
     private void updateSubtitle(String text) {
         FxAnimations.typewriter(subtitleLabel, text, Duration.millis(1200));
+    }
+
+    private void updateReadyState() {
+        Board board = getCurrentPlacementBoard();
+        boolean allPlaced = board != null && board.getShips().size() == ShipType.values().length;
+        readyBtn.setDisable(!allPlaced);
+        readyBtn.setOpacity(allPlaced ? 1.0 : 0.5);
+        readyBtn.setStyle(allPlaced
+                ? "-fx-background-color: linear-gradient(#d8e6ff,#c6d8ff);"
+                : "-fx-background-color: #4a5966;");
+        readyHint.setVisible(allPlaced);
+        readyHint.setText(allPlaced ? "All ships placed. Press Ready." : "");
     }
 }

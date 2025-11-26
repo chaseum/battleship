@@ -1,7 +1,6 @@
 package com.chase.battleship.gui;
 
 import javafx.application.Application;
-import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCombination;
 import javafx.stage.Stage;
@@ -16,7 +15,7 @@ public class GameApp extends Application {
 		this.screenManager = new ScreenManager(primaryStage);
 
 		primaryStage.setTitle("Neo-Retro Battleship");
-		primaryStage.getIcons().add(new Image("/assets/images/carrier_icon.png"));
+		primaryStage.getIcons().add(new Image("/assets/images/stupidicon.png"));
 
 		// preload pixel font for consistent styling
 		try (var fontStream = getClass().getResourceAsStream("/assets/images/PressStart2P.ttf")) {

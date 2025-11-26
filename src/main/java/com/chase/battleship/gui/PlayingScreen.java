@@ -39,6 +39,7 @@ public class PlayingScreen extends BaseScreen {
     private final GridPane enemyGrid;
     private final Pane myShipOverlay;
     private final Pane myEffectOverlay;
+    private final Pane enemySunkOverlay;
     private final Pane enemyEffectOverlay;
     private final javafx.scene.shape.Rectangle enemyHoverRect = new javafx.scene.shape.Rectangle();
     private final javafx.scene.shape.Rectangle enemySelectRect = new javafx.scene.shape.Rectangle();
@@ -74,6 +75,8 @@ public class PlayingScreen extends BaseScreen {
     private boolean isLocalTwoP = false;
     private TurnAction lastAnimatedAction = null;
     private Coordinate pendingFireTarget = null;
+    private AbilityType pendingAbility = null;
+    private final VBox killfeedBox;
 
     public PlayingScreen(ScreenManager manager) {
         super(manager);
@@ -130,11 +133,15 @@ public class PlayingScreen extends BaseScreen {
         myBoardStack = new StackPane(myGrid, myEffectOverlay, myShipOverlay);
         myBoardStack.setPickOnBounds(false);
         enemyGrid = createBoardGrid(true);
+        enemySunkOverlay = new Pane();
+        enemySunkOverlay.setMouseTransparent(true);
+        enemySunkOverlay.setPickOnBounds(false);
+        enemySunkOverlay.setPrefSize(boardPixels, boardPixels);
         enemyEffectOverlay = new Pane();
         enemyEffectOverlay.setMouseTransparent(true);
         enemyEffectOverlay.setPickOnBounds(false);
         enemyEffectOverlay.setPrefSize(boardPixels, boardPixels);
-        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyHoverRect, enemySelectRect, enemyEffectOverlay);
+        StackPane enemyBoardStack = new StackPane(enemyGrid, enemyHoverRect, enemySelectRect, enemySunkOverlay, enemyEffectOverlay);
         enemyBoardStack.setPickOnBounds(false);
 
         Label myLabel = new Label("Your Sea");
@@ -251,9 +258,9 @@ public class PlayingScreen extends BaseScreen {
                 return;
             }
             switch (e.getCode()) {
-                case DIGIT1, NUMPAD1 -> useSonar();
-                case DIGIT2, NUMPAD2 -> useMultishot();
-                case DIGIT3, NUMPAD3 -> useEmp();
+                case DIGIT1, NUMPAD1 -> selectAbility(AbilityType.SONAR);
+                case DIGIT2, NUMPAD2 -> selectAbility(AbilityType.MULTISHOT);
+                case DIGIT3, NUMPAD3 -> selectAbility(AbilityType.EMP);
                 default -> { }
             }
         });
@@ -277,6 +284,13 @@ public class PlayingScreen extends BaseScreen {
         StackPane mainLayer = new StackPane(centerStack, settingsOverlay, handoffOverlay);
         root.setCenter(mainLayer);
         root.setBottom(bottomBox);
+
+        killfeedBox = new VBox(6);
+        killfeedBox.setAlignment(Pos.TOP_RIGHT);
+        killfeedBox.setMouseTransparent(true);
+        StackPane.setAlignment(killfeedBox, Pos.TOP_RIGHT);
+        StackPane.setMargin(killfeedBox, new Insets(10, 10, 0, 0));
+        mainLayer.getChildren().add(killfeedBox);
     }
 
     @Override
@@ -365,6 +379,20 @@ public class PlayingScreen extends BaseScreen {
         }
 
         Coordinate target = new Coordinate(row, col);
+        if (pendingAbility != null) {
+            AbilityTarget at = switch (pendingAbility) {
+                case SONAR, EMP -> new AbilityTarget(target, 0);
+                case MULTISHOT -> new AbilityTarget(java.util.List.of(target));
+                case SHIELD -> new AbilityTarget(target, 0);
+            };
+            UseAbilityAction abilityAction = new UseAbilityAction(pendingAbility, at);
+            pendingAbility = null;
+            styleAbilitySelection();
+            fireHint.setVisible(false);
+            performHumanTurn(abilityAction);
+            return;
+        }
+
         if (pendingFireTarget != null && pendingFireTarget.equals(target)) {
             pendingFireTarget = null;
             enemySelectRect.setVisible(false);
@@ -403,7 +431,9 @@ public class PlayingScreen extends BaseScreen {
             return;
         }
 
-        PauseTransition pause = new PauseTransition(TURN_DELAY);
+        double typeMs = 900;
+        Duration wait = Duration.millis(Math.max(TURN_DELAY.toMillis(), typeMs + 200));
+        PauseTransition pause = new PauseTransition(wait);
         pause.setOnFinished(e -> {
             isProcessing = false;
             syncFromState();
@@ -486,6 +516,7 @@ public class PlayingScreen extends BaseScreen {
 
         redrawOwnBoard(myBoard);
         redrawEnemyBoard(myTracking);
+        renderSunkEnemyShips(enemy);
         refreshFleetPanel(me);
         animateSunkShips(myBoard);
 
@@ -635,6 +666,49 @@ public class PlayingScreen extends BaseScreen {
         }
     }
 
+    private void renderSunkEnemyShips(PlayerState enemy) {
+        enemySunkOverlay.getChildren().clear();
+        if (enemy == null) return;
+        Board board = enemy.getOwnBoard();
+        if (board == null) return;
+        double stepX = CELL_SIZE + enemyGrid.getHgap();
+        double stepY = CELL_SIZE + enemyGrid.getVgap();
+        double insetX = enemyGrid.getHgap() / 2.0;
+        double insetY = enemyGrid.getVgap() / 2.0;
+
+        for (Ship ship : board.getShips()) {
+            if (!ship.isSunk()) continue;
+            java.util.List<Coordinate> coords = ship.getCoordinates();
+            if (coords.isEmpty()) continue;
+            boolean horizontal = coords.size() < 2 || coords.get(0).row() == coords.get(1).row();
+            int minRow = coords.stream().mapToInt(Coordinate::row).min().orElse(0);
+            int minCol = coords.stream().mapToInt(Coordinate::col).min().orElse(0);
+            double x = minCol * stepX;
+            double y = minRow * stepY;
+
+            Image art = horizontal
+                    ? AssetLibrary.shipTopDown(ship.getType())
+                    : AssetLibrary.shipTopDownVertical(ship.getType());
+            ImageView view = new ImageView(art);
+            view.setSmooth(false);
+            view.setPreserveRatio(true);
+
+            int len = ship.getType().getLength();
+            if (horizontal) {
+                view.setFitHeight(CELL_SIZE);
+                view.setFitWidth(len * CELL_SIZE + enemyGrid.getHgap() * (len - 1));
+            } else {
+                view.setFitWidth(CELL_SIZE);
+                view.setFitHeight(len * CELL_SIZE + enemyGrid.getVgap() * (len - 1));
+            }
+            view.setOpacity(0.55);
+            view.setMouseTransparent(true);
+            view.setLayoutX(x + insetX);
+            view.setLayoutY(y + insetY);
+            enemySunkOverlay.getChildren().add(view);
+        }
+    }
+
     private Color colorForOwnCell(CellState cs) {
         return switch (cs) {
             case HIT -> HIT_COLOR;
@@ -688,9 +762,9 @@ public class PlayingScreen extends BaseScreen {
         multiBtn = new Button("Multishot");
         empBtn = new Button("EMP");
 
-        sonarBtn.setOnAction(e -> useSonar());
-        multiBtn.setOnAction(e -> useMultishot());
-        empBtn.setOnAction(e -> useEmp());
+        sonarBtn.setOnAction(e -> selectAbility(AbilityType.SONAR));
+        multiBtn.setOnAction(e -> selectAbility(AbilityType.MULTISHOT));
+        empBtn.setOnAction(e -> selectAbility(AbilityType.EMP));
 
         HBox abilityRow = new HBox(10, sonarBtn, multiBtn, empBtn);
         abilityRow.setAlignment(Pos.CENTER);
@@ -721,68 +795,76 @@ public class PlayingScreen extends BaseScreen {
         AbilityStatus sonar = abilities.getStatus(AbilityType.SONAR);
         AbilityStatus multi = abilities.getStatus(AbilityType.MULTISHOT);
         AbilityStatus emp = abilities.getStatus(AbilityType.EMP);
+        AbilityStatus shield = abilities.getStatus(AbilityType.SHIELD);
 
-        sonarBtn.setDisable(!myTurn || locked || sonar == null || !sonar.isAvailable());
-        multiBtn.setDisable(!myTurn || locked || multi == null || !multi.isAvailable());
-        empBtn.setDisable(!myTurn || locked || emp == null || !emp.isAvailable());
+        if (pendingAbility != null) {
+            boolean stillOk = switch (pendingAbility) {
+                case SONAR -> sonar != null && sonar.isAvailable();
+                case MULTISHOT -> multi != null && multi.isAvailable();
+                case EMP -> emp != null && emp.isAvailable();
+                case SHIELD -> shield != null && shield.isAvailable();
+            };
+            if (!stillOk) {
+                pendingAbility = null;
+                styleAbilitySelection();
+            }
+        }
 
-        sonarBtn.setOpacity(sonarBtn.isDisabled() ? 0.5 : 1.0);
-        multiBtn.setOpacity(multiBtn.isDisabled() ? 0.5 : 1.0);
-        empBtn.setOpacity(empBtn.isDisabled() ? 0.5 : 1.0);
+        updateAbilityButton(sonarBtn, AbilityType.SONAR, sonar, myTurn, locked, "Reveal 3x3 area.");
+        updateAbilityButton(multiBtn, AbilityType.MULTISHOT, multi, myTurn, locked, "Fire 3 staggered shots.");
+        updateAbilityButton(empBtn, AbilityType.EMP, emp, myTurn, locked, "Disable enemy abilities for 2 turns.");
     }
 
-    private void useSonar() {
-        if (session == null || isProcessing) return;
-        if (!session.getConfig().getGameMode().isNeoRetro()) return;
-        if (!session.isCurrentPlayerHuman()) return;
+    private void updateAbilityButton(Button btn, AbilityType type, AbilityStatus status, boolean myTurn, boolean locked, String description) {
+        boolean available = status != null && status.isAvailable() && !locked && myTurn;
+        btn.setDisable(!available);
+        btn.setOpacity(btn.isDisabled() ? 0.5 : 1.0);
+
+        int charges = status != null ? status.getCharges() : 0;
+        int cd = status != null ? status.getCooldownRemaining() : 0;
+        btn.setText(type.name() + (charges > 0 ? " (" + charges + ")" : ""));
+
+        javafx.scene.control.Tooltip tt = new javafx.scene.control.Tooltip(description +
+                (charges > 0 ? "\nUses left: " + charges : "") +
+                (cd > 0 ? "\nCooldown: " + cd : ""));
+        btn.setTooltip(tt);
+
+        HBox ticks = new HBox(3);
+        ticks.setAlignment(Pos.CENTER);
+        int bars = Math.max(1, charges + cd);
+        for (int i = 0; i < bars; i++) {
+            Rectangle r = new Rectangle(10, 4);
+            boolean filled = i < charges;
+            r.setFill(filled ? Color.web("#8ae8ff") : Color.web("#344b58"));
+            ticks.getChildren().add(r);
+        }
+        btn.setGraphic(ticks);
+
+        if (pendingAbility == type) {
+            btn.setStyle("-fx-border-color: #8ae8ff; -fx-border-width: 2;");
+        } else {
+            btn.setStyle("");
+        }
+    }
+
+    private void selectAbility(AbilityType type) {
+        if (session == null || isProcessing || !session.getConfig().getGameMode().isNeoRetro()) return;
+        if (!session.isCurrentPlayerHuman() || waitingForHandOff) return;
         PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
         if (me.abilitiesLocked()) {
             actionLabel.setText("Abilities disabled by EMP!");
             return;
         }
-
-        // Simple sonar: center on the middle of the board for now
-        Coordinate center = new Coordinate(5, 5);
-        TurnAction action = new UseAbilityAction(
-                AbilityType.SONAR,
-                new AbilityTarget(center, 0)
-        );
-        performHumanTurn(action);
+        pendingAbility = type;
+        styleAbilitySelection();
+        fireHint.setVisible(true);
+        fireHint.setText("Select a target for " + type.name());
     }
 
-    private void useMultishot() {
-        if (session == null || isProcessing) return;
-        if (!session.getConfig().getGameMode().isNeoRetro()) return;
-        if (!session.isCurrentPlayerHuman()) return;
-        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
-        if (me.abilitiesLocked()) {
-            actionLabel.setText("Abilities disabled by EMP!");
-            return;
-        }
-
-        // Fire 3 random shots (same as AI semantics)
-        TurnAction action = new UseAbilityAction(
-                AbilityType.MULTISHOT,
-                new AbilityTarget(null, 3)
-        );
-        performHumanTurn(action);
-    }
-
-    private void useEmp() {
-        if (session == null || isProcessing) return;
-        if (!session.getConfig().getGameMode().isNeoRetro()) return;
-        if (!session.isCurrentPlayerHuman()) return;
-        PlayerState me = isLocalTwoP ? session.getState().getCurrentPlayer() : session.getLocalPlayer();
-        if (me.abilitiesLocked()) {
-            actionLabel.setText("Abilities disabled by EMP!");
-            return;
-        }
-
-        TurnAction action = new UseAbilityAction(
-                AbilityType.EMP,
-                new AbilityTarget(null, 0)
-        );
-        performHumanTurn(action);
+    private void styleAbilitySelection() {
+        if (sonarBtn != null) sonarBtn.setStyle(pendingAbility == AbilityType.SONAR ? "-fx-border-color: #8ae8ff; -fx-border-width: 2;" : "");
+        if (multiBtn != null) multiBtn.setStyle(pendingAbility == AbilityType.MULTISHOT ? "-fx-border-color: #8ae8ff; -fx-border-width: 2;" : "");
+        if (empBtn != null) empBtn.setStyle(pendingAbility == AbilityType.EMP ? "-fx-border-color: #8ae8ff; -fx-border-width: 2;" : "");
     }
 
     private void handleGameOver() {
@@ -913,7 +995,8 @@ public class PlayingScreen extends BaseScreen {
                 actionClear.stop();
             }
             FxAnimations.stopMarquee(actionLabel);
-            FxAnimations.typewriter(actionLabel, actionText, Duration.millis(1400));
+            double typeMs = 900;
+            FxAnimations.typewriter(actionLabel, actionText, Duration.millis(typeMs));
             actionClear = new PauseTransition(Duration.seconds(6));
             actionClear.setOnFinished(e -> actionLabel.setText(""));
             actionClear.playFromStart();
@@ -921,7 +1004,29 @@ public class PlayingScreen extends BaseScreen {
                 double visibleWidth = actionLabel.getWidth() > 0 ? actionLabel.getWidth() : 900;
                 FxAnimations.marqueeIfNeeded(actionLabel, visibleWidth);
             });
+            addKillfeedEntry(actionText);
         }
+    }
+
+    private void addKillfeedEntry(String text) {
+        Label entry = new Label(text);
+        entry.setStyle("-fx-text-fill: #e6f4ff; -fx-font-size: 12px; -fx-font-family: 'Press Start 2P';");
+        entry.setOpacity(0.0);
+        killfeedBox.getChildren().add(0, entry);
+        while (killfeedBox.getChildren().size() > 4) {
+            killfeedBox.getChildren().remove(killfeedBox.getChildren().size() - 1);
+        }
+
+        FadeTransition fadeIn = new FadeTransition(Duration.millis(180), entry);
+        fadeIn.setFromValue(0.0);
+        fadeIn.setToValue(1.0);
+
+        PauseTransition hold = new PauseTransition(Duration.seconds(5));
+        FadeTransition fadeOut = new FadeTransition(Duration.millis(500), entry);
+        fadeOut.setToValue(0.0);
+        fadeOut.setOnFinished(e -> killfeedBox.getChildren().remove(entry));
+
+        new SequentialTransition(fadeIn, hold, fadeOut).play();
     }
 
     private String simplifyMessage(String message) {
@@ -997,7 +1102,8 @@ public class PlayingScreen extends BaseScreen {
         PlayerState me = session.getState().getCurrentPlayer();
         Board tracking = me.getTrackingBoard();
         CellState state = tracking.getCellState(new Coordinate(row, col));
-        boolean canFire = state == CellState.EMPTY && session.isCurrentPlayerHuman() && !waitingForHandOff;
+        boolean canFire = session.isCurrentPlayerHuman() && !waitingForHandOff &&
+                (pendingAbility != null || state == CellState.EMPTY);
 
         double stepX = CELL_SIZE + enemyGrid.getHgap();
         double stepY = CELL_SIZE + enemyGrid.getVgap();

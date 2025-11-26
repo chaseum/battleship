@@ -19,23 +19,32 @@ public class SinglePlayerScreen extends BaseScreen {
         Label title = new Label("Single Player");
         title.setStyle("-fx-text-fill: #f0f0f0; -fx-font-size: 32px; -fx-font-family: 'Press Start 2P';");
 
+        Label desc = new Label("Select a mode to see details.");
+        desc.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 11px; -fx-font-family: 'Press Start 2P';");
+        desc.setWrapText(true);
+        desc.setMaxWidth(520);
+        desc.setAlignment(Pos.CENTER_LEFT);
+
         menu = new RetroMenu(java.util.List.of(
-                new RetroMenu.Option("Classic vs AI", () -> {
+                new RetroMenu.Option("Classic vs AI", "Standard rules, no abilities. Pure guess-and-hunt against the AI.", () -> {
                     manager.setPlannedMode(GuiGameSession.Mode.CLASSIC_VS_AI);
                     manager.clearCurrentSession();
                     manager.show(ScreenId.SETUP);
                 }),
-                new RetroMenu.Option("Neo-Retro vs AI", () -> {
+                new RetroMenu.Option("Neo-Retro vs AI", "Abilities enabled (Sonar, Multishot, EMP) against the AI.", () -> {
                     manager.setPlannedMode(GuiGameSession.Mode.NEORETRO_VS_AI);
                     manager.clearCurrentSession();
                     manager.show(ScreenId.SETUP);
                 })
         ));
+        menu.setSelectionListener(opt -> desc.setText(opt.description().isBlank()
+                ? "Select a mode to see details."
+                : opt.description()));
 
         Label hint = new Label("Arrow keys / Enter or mouse. Esc for settings/back.");
-        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 9px; -fx-font-family: 'Press Start 2P';");
+        hint.setStyle("-fx-text-fill: #b0d8f0; -fx-font-size: 8px; -fx-font-family: 'Press Start 2P';");
 
-        VBox layout = new VBox(18, title, menu, hint);
+        VBox layout = new VBox(16, title, menu, desc, hint);
         layout.setAlignment(Pos.CENTER);
         layout.setStyle("-fx-padding: 40;");
 

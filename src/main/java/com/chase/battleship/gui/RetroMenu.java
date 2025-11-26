@@ -7,17 +7,23 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Simple retro-style text menu that supports mouse hover and arrow/enter navigation.
  */
 public class RetroMenu extends VBox {
 
-    public record Option(String label, Runnable action) {}
+    public record Option(String label, String description, Runnable action) {
+        public Option(String label, Runnable action) {
+            this(label, "", action);
+        }
+    }
 
     private final List<Option> options = new ArrayList<>();
     private final List<Label> labels = new ArrayList<>();
     private int selectedIndex = 0;
+    private Consumer<Option> selectionListener;
 
     public RetroMenu(List<Option> menuOptions) {
         super(10);
@@ -47,6 +53,9 @@ public class RetroMenu extends VBox {
         idx = Math.max(0, Math.min(idx, options.size() - 1));
         selectedIndex = idx;
         refreshLabels();
+        if (selectionListener != null && idx >= 0 && idx < options.size()) {
+            selectionListener.accept(options.get(idx));
+        }
     }
 
     private void refreshLabels() {
@@ -90,5 +99,12 @@ public class RetroMenu extends VBox {
 
     public void focusFirst() {
         setSelectedIndex(0);
+    }
+
+    public void setSelectionListener(Consumer<Option> listener) {
+        this.selectionListener = listener;
+        if (listener != null && !options.isEmpty()) {
+            listener.accept(options.get(selectedIndex));
+        }
     }
 }

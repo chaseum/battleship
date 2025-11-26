@@ -1,15 +1,23 @@
 
-# general
-- text "your turn" & "fired at" is misaligned
-- fleet icons aren't sized properly according to tile size on grid (submarine is largest and carrier is smallest)
-- submarine text is overlapping
-
-# controls screen
-- carousel is good, but needs space in the middle to fit either a gif or generate a sample "turn" that performs the ability listed
-
-# playing screen
-- hovering over grid square doesn't change the color to indicate if that's the place to fire
+- hovering over grid square doesn't change the color to indicate if that's the place to fire, its currently a singular square in the middle like a crosshair
+^-> change to use the same logic/visual as ship setup that determines whether a ship can be placed there or not, but for the board and if the player can fire on that grid spot or not.
 - possible feature: for normal firing (player only) implement a 2 step firing process (select square -> ready)
+- "arrow keys / enter or mouse / ..." is too big and is in the wrong place (needs to be less disruptive to singleplayer and multiplayer screens, title screen is fine)
+- add descriptions to the single player choices that show up when you hover over them (when you click on single/multiplayer there should be a description on the next screen)
+- make the size of the ships relative to how big they appear on the board (currently submarine is too big and carrier is too small)
+- when rotating ships it needs to happen immediately after pressing r, not after moving around cursor
+- make a label/sign that tells the player they can hit ready when all the ships are placed (possibly outward ripples and a color change)
+- have the ready button dark and disabled until the player has readied all of their ships 
+- text at the top is too slow, needs to finish typing out where the player fired before the opponent fires (and should wait for the text to be completed before moving on)
+- keeping scrolling text, but convert the message at the top into a csgo-like killfeed that stacks on top of eachother and fades
+- add the ship topdown png onto the enemy board once the player has sunken an enemy ship to indicate that ship is done (revealing the location)
+- when the player hits auto-setup they should still be able to manually move the ships
+- special abilities need descriptions, should include it during the game play (players don't want to open up controls to figure out what everything does)
+^-> a description of the ability should show up when the player hovers over it, as well as the amount of uses available should be on the button (or recharge time)
+^-> for example, each of the ability buttons should have small tick bars that tick up/down after uses
+- revamp ability gui, player should have to click on ability and then where on the board they want to place it
+- reuse the ripple effect from the ready button earlier so the player knows what they selected
+- decision tree ai needs improvement (consider using an ollama model and the correct prompts)
+^-> for ollama, feed it the array of misses, hits, and empty space, abilities, how much, cooldown & rules, direct it to only send back the coordinates, and if its using an ability, parse the info and feed it in
+^-> only considering if it gives brownie points on a resume to a recruiter
 
-# text
-- "arrow keys / enter or mouse / ..." is too big and is in the wrong place (needs to be less disruptive to screen)
